@@ -1,6 +1,6 @@
 {
   "name": "@maplesnow/model-gateway",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Self-hosted LLM gateway: one endpoint for your AI subscriptions and APIs, ordered fallback, quota tracking, usage dashboard and an Admin API for AI-driven management.",
   "keywords": [
     "llm",
