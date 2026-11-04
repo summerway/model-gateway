@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Normalized observed usage record (not the push body)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "ts", "model", "kind", "path", "providerId", "client", "device", "usage", "reported"],
+  "properties": {
+    "eventId": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "ts": { "type": "string" },
+    "model": { "type": "string" },
+    "upstreamModel": { "type": "string" },
+    "kind": { "const": "observed" },
+    "path": { "type": "string" },
+    "providerId": { "type": "string" },
+    "client": { "type": "string" },
+    "device": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$" },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "output", "cacheRead", "cacheWrite"],
+      "properties": {
+        "input": { "type": "integer", "minimum": 0 },
+        "output": { "type": "integer", "minimum": 0 },
+        "cacheRead": { "type": "integer", "minimum": 0 },
+        "cacheWrite": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "reported": { "const": true }
+  }
+}

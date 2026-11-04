@@ -1,0 +1,9 @@
+event: response.created
+data: {"type":"response.created","response":{"id":"resp_gpt6_sse_002","status":"in_progress","model":"gpt-6-luna"}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","output_index":0,"item":{"id":"fc_001","type":"function_call","status":"completed","call_id":"call_db_001","name":"query_db","arguments":"{\"sql\": \"SELECT 1\"}"}}
+
+event: response.completed
+data: {"type":"response.completed","response":{"id":"resp_gpt6_sse_002","status":"completed","model":"gpt-6-luna","usage":{"input_tokens":30,"output_tokens":11,"total_tokens":41}}}
+

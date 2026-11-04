@@ -1,0 +1,826 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Model Gateway</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="把你的 AI 订阅接到同一个地址：额度用完自动换，用量一目了然。">
+<link rel="icon" href="assets/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="vendor/topology.css">
+<link rel="stylesheet" href="views.css">
+<link rel="stylesheet" href="activity.css">
+<script src="vendor/topology.js" defer></script>
+<script src="data.js" defer></script>
+<script src="views.js" defer></script>
+<script src="activity.js" defer></script>
+<style>
+/* Layout: 1120px rail. The hero is the real dashboard topology module fed a simulated NAS snapshot; below it a lean skeleton with mount points for the view tour (MG22) and the activity chart (MG23). */
+:root {
+  --page:#f9f9f7; --surface:#fcfcfb; --sunk:#f0efea; --ink:#171816; --ink-2:#4a4945; --muted:#67665f;
+  --hair:rgba(11,11,11,.12); --line:rgba(36,103,182,.28); --accent:#2467b6; --accent-wash:#eaf2fc; --on-accent:#ffffff;
+  --ok:#0b7d0b; --ok-wash:#e9f5ec; --warn:#9a6400; --warn-wash:#fff2d8; --bad:#c22b2b; --bad-wash:#fdeeee;
+  --c-glm:#5b4fb5; --c-ds:#2a78d6; --c-gpt:#0f8a6a; --c-claude:#d0653a; --c-bl:#c9851a;
+  --term:#151715; --term-ink:#e6e8e1;
+  --font-display:"Schibsted Grotesk", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-body:system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --base:#c3c2b7; --font:system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page:#101110; --surface:#1a1c1a; --sunk:#151715; --ink:#f3f4ef; --ink-2:#c5c7bc; --muted:#a3a59b;
+  --hair:rgba(255,255,255,.13); --line:rgba(131,184,251,.3); --accent:#83b8fb; --accent-wash:#1c2d42; --on-accent:#0d1626;
+  --ok:#4fd065; --ok-wash:#193323; --warn:#f5b02e; --warn-wash:#3b3018; --bad:#f07070; --bad-wash:#402222;
+  --c-glm:#a29bff; --c-ds:#6da6ff; --c-gpt:#2fd6a4; --c-claude:#ff9a6b; --c-bl:#ffc84d;
+  --term:#0b0c0b; --base:#41443e; color-scheme:dark;
+} }
+:root[data-theme="dark"] {
+  --page:#101110; --surface:#1a1c1a; --sunk:#151715; --ink:#f3f4ef; --ink-2:#c5c7bc; --muted:#a3a59b;
+  --hair:rgba(255,255,255,.13); --line:rgba(131,184,251,.3); --accent:#83b8fb; --accent-wash:#1c2d42; --on-accent:#0d1626;
+  --ok:#4fd065; --ok-wash:#193323; --warn:#f5b02e; --warn-wash:#3b3018; --bad:#f07070; --bad-wash:#402222;
+  --c-glm:#a29bff; --c-ds:#6da6ff; --c-gpt:#2fd6a4; --c-claude:#ff9a6b; --c-bl:#ffc84d;
+  --term:#0b0c0b; --base:#41443e; color-scheme:dark;
+}
+* { box-sizing:border-box; }
+html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } }
+body { margin:0; background:var(--page); color:var(--ink); font:16px/1.65 var(--font-body); }
+img { max-width:100%; display:block; }
+a { color:var(--accent); text-underline-offset:3px; }
+button { font:inherit; color:inherit; cursor:pointer; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:6px; }
+h1,h2,h3 { font-family:var(--font-display); text-wrap:balance; margin:0; letter-spacing:-.01em; }
+p { margin:0; }
+.wrap { max-width:1120px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+.num { font-variant-numeric:tabular-nums; }
+
+/* nav */
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--page); }
+.nav { position:sticky; top:env(safe-area-inset-top, 0px); z-index:9; background:color-mix(in srgb, var(--page) 90%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--hair); }
+.nav .wrap { display:flex; align-items:center; gap:20px; min-height:60px; }
+.brand { display:flex; align-items:center; gap:10px; color:var(--ink); text-decoration:none; font:700 17px var(--font-display); }
+.brand img { width:30px; height:30px; }
+.nav-links { display:flex; gap:18px; margin-left:auto; align-items:center; font-size:14px; }
+.nav-links a { color:var(--ink-2); text-decoration:none; }
+.nav-links a:hover { color:var(--ink); }
+.lang { display:inline-flex; border:1px solid var(--hair); border-radius:8px; overflow:hidden; }
+.lang button { font-size:13px; font-weight:500; color:var(--muted); background:transparent; border:0; padding:6px 12px; }
+.lang button[aria-pressed="true"] { background:var(--ink); color:var(--page); }
+@media (max-width:720px) { .nav-links .hide-sm { display:none; } }
+
+/* hero */
+.hero { padding-block:56px 24px; }
+.hero-copy { display:grid; gap:18px; max-width:760px; margin-inline:auto; text-align:center; justify-items:center; }
+ .nb { white-space:nowrap; }
+.hero h1 { font-size:clamp(34px, 5.2vw, 58px); line-height:1.08; font-weight:800; text-wrap:balance; }
+.hero .lede { font-size:clamp(12px, 2.4vw, 18px); color:var(--ink-2); white-space:nowrap; max-width:none; }
+.cta-row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.btn { display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:15px; text-decoration:none; padding:11px 18px; border-radius:10px; border:0; }
+.btn-primary { background:var(--accent); color:var(--on-accent); }
+.btn-ghost { color:var(--ink); border:1px solid var(--hair); background:transparent; }
+.btn-ghost:hover { border-color:var(--muted); }
+
+/* dashboard window (hero topology) */
+.win { margin-top:36px; border:1px solid var(--hair); border-radius:18px; background:var(--surface); overflow:hidden; min-width:0; }
+.win-body { padding:16px; min-width:0; }
+/* the topology module reuses the console card header; flatten the outer card chrome inside the window */
+.win-body .card { border:0; border-radius:0; padding:0; background:transparent; min-width:0; }
+.card-h { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.card-h h2 { margin:0; font-size:15px; font-weight:650; }
+
+/* sections */
+section.block { padding-block:96px 0; }
+.sec-head { max-width:720px; display:grid; gap:12px; }
+.sec-head h2 { font-size:clamp(28px, 3.6vw, 42px); line-height:1.15; font-weight:800; }
+.sec-head p { color:var(--ink-2); font-size:17px; }
+
+/* mount points for MG22 / MG23 */
+.mount-pending { margin-top:40px; border:1px dashed var(--hair); border-radius:16px; background:var(--surface); padding:44px 24px; text-align:center; color:var(--muted); font-size:15px; }
+
+/* split layout for demos */
+.split { margin-top:40px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); gap:40px; align-items:start; }
+@media (max-width:900px) { .split { grid-template-columns:minmax(0,1fr); gap:28px; } }
+.points { display:grid; gap:18px; }
+.card { border:1px solid var(--hair); border-radius:16px; background:var(--surface); padding:22px; min-width:0; }
+
+/* chat */
+.chat { display:grid; gap:12px; align-content:start; min-height:300px; transition:opacity .18s ease; }
+.chat.swap { opacity:0; }
+.msg { max-width:88%; border-radius:14px; padding:12px 16px; font-size:15px; min-width:0; animation:rise .3s ease-out; }
+@keyframes rise { from { transform:translateY(6px); opacity:.4; } }
+@media (prefers-reduced-motion: reduce) { .msg { animation:none; } }
+.msg.no-rise { animation:none; }
+.msg.user { justify-self:end; background:var(--accent); color:var(--on-accent); border-bottom-right-radius:4px; }
+.msg.ai { justify-self:start; background:var(--sunk); border-bottom-left-radius:4px; }
+.msg .diff { margin:8px 0; font:12.5px/1.7 var(--font-mono); background:var(--surface); border-radius:8px; padding:8px 12px; overflow-x:auto; white-space:pre; }
+.diff .add { color:var(--ok); } .diff .del { color:var(--bad); }
+.prompts { display:flex; flex-wrap:wrap; gap:8px; }
+.prompts button { border:1px solid var(--hair); background:var(--surface); border-radius:999px; padding:8px 14px; font-size:14px; color:var(--ink-2); text-align:left; }
+.prompts button:hover, .prompts button[aria-pressed="true"] { border-color:var(--accent); color:var(--accent); }
+
+/* privacy */
+.privacy { margin-top:40px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
+@media (max-width:800px) { .privacy { grid-template-columns:minmax(0,1fr); } }
+.pv h3 { font-size:18px; }
+.pv ul { list-style:none; margin:14px 0 0; padding:0; display:grid; gap:10px; }
+.pv li { display:grid; grid-template-columns:22px minmax(0,1fr); gap:8px; font-size:15px; color:var(--ink-2); }
+.pv li::before { content:"✓"; color:var(--ok); font-weight:700; }
+.pv.no li::before { content:"✕"; color:var(--bad); }
+.payload { margin-top:16px; }
+.payload summary { cursor:pointer; font-size:14px; font-weight:600; color:var(--accent); }
+.payload pre { margin:10px 0 0; font:12.5px/1.65 var(--font-mono); background:var(--sunk); border-radius:10px; padding:12px 14px; overflow-x:auto; }
+.rules { margin-top:16px; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; }
+@media (max-width:800px) { .rules { grid-template-columns:minmax(0,1fr); } }
+.rule h3 { font-size:16px; }
+.rule p { font-size:14.5px; color:var(--ink-2); margin-top:6px; }
+
+/* ops：5h 窗口激活（并排时间轴对比 + 播放演示）+ 模型升级（步骤条 + 新旧对照 → 预览 → 落地 → 回滚） */
+.ops { margin-top:36px; display:grid; grid-template-columns:minmax(0,1fr); gap:16px; align-items:start; }
+.ops h3 { font-size:19px; letter-spacing:-0.01em; }
+.ops .sub { font-size:14.5px; color:var(--ink-2); margin-top:6px; max-width:62ch; }
+
+/* 卡 1：三步说明（编号圆点，手机竖排） */
+.op-how { list-style:none; margin:14px 0 0; padding:0; counter-reset:opstep; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px 16px; }
+.op-how li { counter-increment:opstep; display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--ink-2); min-width:0; }
+.op-how li::before { content:counter(opstep); flex:none; width:20px; height:20px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font:700 11.5px/1 var(--font-display); background:var(--accent-wash); color:var(--accent); }
+
+/* 卡 1：两条时间轴同时显示（行标签 | 轴 | 结果标签），外层可横向滚动 */
+.op-tl-scroll { margin-top:8px; overflow-x:auto; }
+.op-tl { position:relative; display:grid; grid-template-columns:88px minmax(0,1fr) max-content; gap:14px 10px; align-items:center; min-width:560px; padding-top:28px; }
+.op-tl .lab { font-size:12.5px; color:var(--muted); }
+.op-track { position:relative; height:52px; border-radius:8px; background:var(--sunk); container-type:inline-size; }
+.op-blk { position:absolute; top:0; bottom:0; border-radius:6px; }
+.op-blk.wn { background:var(--accent-wash); box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); }
+.op-blk.idle { background-image:repeating-linear-gradient(135deg, var(--warn-wash) 0 7px, transparent 7px 14px); box-shadow:inset 2px 0 0 var(--warn); display:flex; align-items:center; justify-content:center; padding:0 5px; overflow:hidden; text-align:center; font-size:10px; font-weight:600; line-height:1.25; color:var(--warn); white-space:normal; }
+.op-blk.idle.hl { box-shadow:inset 2px 0 0 var(--warn), 0 0 0 2px var(--warn); }
+.op-blk.idle .l { display:none; }
+@container (min-width:540px) { .op-blk.idle .l:lang(zh) { display:inline; } .op-blk.idle .s:lang(zh) { display:none; } }
+@container (min-width:720px) { .op-blk.idle .l:lang(en) { display:inline; } .op-blk.idle .s:lang(en) { display:none; } }
+.op-blk.wait { background-image:repeating-linear-gradient(135deg, var(--bad-wash) 0 7px, transparent 7px 14px); box-shadow:inset 2px 0 0 var(--bad); }
+.op-use { position:absolute; bottom:6px; height:6px; border-radius:3px; background:var(--accent); z-index:2; }
+.op-ping { position:absolute; top:-14px; bottom:0; width:2px; margin-left:-1px; background:var(--ok); z-index:3; }
+.op-ping::after { content:"⚡"; position:absolute; top:0; left:50%; transform:translateX(-50%); font-size:11px; line-height:1.2; }
+.op-ping.hit { box-shadow:0 0 0 3px var(--ok-wash); }
+.op-ping.hit::after { animation:op-zap .45s ease 3; }
+@keyframes op-zap { 50% { transform:translateX(-50%) scale(1.8); } }
+@media (prefers-reduced-motion: reduce) { .op-ping.hit::after { animation:none; } }
+.op-ping-lab { position:absolute; top:0; left:7px; transform:translateY(-100%); white-space:nowrap; font-size:11px; font-weight:600; color:var(--ok); background:var(--surface); border:1px solid var(--hair); border-radius:6px; padding:2px 7px; box-shadow:0 1px 4px rgb(0 0 0 / .12); }
+.op-quota { position:absolute; top:-7px; bottom:-7px; width:0; border-left:2px dashed var(--bad); z-index:3; }
+.op-quota-lab { position:absolute; top:-22px; transform:translateX(-50%); white-space:nowrap; font:600 11px var(--font-mono); color:var(--bad); z-index:4; transition:opacity .2s; }
+.op-tl.playing .op-quota-lab { opacity:.25; }
+.op-res { font-size:12px; font-weight:700; white-space:nowrap; }
+.op-res.bad { color:var(--bad); } .op-res.ok { color:var(--ok); }
+.op-ph { position:absolute; top:-7px; bottom:-7px; width:2px; margin-left:-1px; background:var(--ink); z-index:5; opacity:0; pointer-events:none; transition:opacity .25s; }
+.op-ph.run { opacity:1; }
+.op-ph .t { position:absolute; top:-22px; left:0; transform:translateX(-50%); white-space:nowrap; font:600 11px var(--font-mono); color:var(--ink); background:var(--surface); border:1px solid var(--hair); border-radius:6px; padding:1px 6px; }
+@media (prefers-reduced-motion: reduce) { .op-ph { transition:none; } }
+.op-axis { position:relative; height:16px; font:11px var(--font-mono); color:var(--muted); }
+.op-axis span { position:absolute; transform:translateX(-50%); }
+.op-axis span:first-child { transform:none; } .op-axis span:last-child { transform:translateX(-100%); }
+
+/* 卡 1：结论条 + ▶ 播放 */
+.op-concl { margin-top:18px; display:flex; align-items:center; gap:6px 14px; flex-wrap:wrap; }
+.op-concl p { font-size:15px; color:var(--ink-2); min-width:0; }
+.op-concl b { font:700 28px/1.1 var(--font-display); letter-spacing:-0.01em; color:var(--ok); margin:0 3px; }
+.op-concl button { margin-left:auto; font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px; border:1px solid var(--hair); background:var(--surface); color:var(--ink); }
+.op-concl button:hover { border-color:var(--accent); color:var(--accent); }
+
+/* 卡 1：说明列表（两列，手机一列） */
+.op-notes { list-style:none; margin:18px 0 0; padding:0; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px 20px; }
+.op-notes li { display:grid; grid-template-columns:18px minmax(0,1fr); gap:6px; font-size:13px; color:var(--ink-2); }
+.op-notes li::before { content:"✓"; color:var(--ok); font-weight:700; }
+
+/* 卡 2：步骤条（当前步随交互高亮） */
+.op-steps { margin-top:16px; display:flex; align-items:center; gap:8px; }
+.op-steps .st { display:flex; align-items:center; gap:7px; flex:none; font-size:13px; color:var(--muted); min-width:0; }
+.op-steps .st::before { content:attr(data-n); flex:none; width:22px; height:22px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font:700 11.5px/1 var(--font-display); border:1px solid var(--hair); background:var(--surface); color:var(--muted); }
+.op-steps .st.did { color:var(--ink-2); }
+.op-steps .st.did::before { border-color:transparent; background:var(--ok-wash); color:var(--ok); }
+.op-steps .st.on { color:var(--ink); font-weight:600; }
+.op-steps .st.on::before { border-color:var(--accent); background:var(--accent-wash); color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash); }
+.op-steps i { flex:1 1 0; height:2px; border-radius:1px; background:var(--hair); min-width:10px; }
+.op-steps i.did { background:var(--ok); }
+
+/* 卡 2：新旧对照（左右两块 + →，手机上下排） */
+.op-pair { margin-top:14px; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:12px; align-items:stretch; }
+.op-pair .arrow { align-self:center; color:var(--muted); font-size:20px; font-weight:700; padding:0 2px; }
+.op-md { border:1px solid var(--hair); border-radius:12px; background:var(--page); padding:12px 14px; min-width:0; }
+.op-md .head { display:flex; align-items:center; gap:8px; }
+.op-md .head .op-badge { margin-left:auto; }
+.op-md .tag { font-size:11.5px; font-weight:700; letter-spacing:.04em; color:var(--muted); }
+.op-md .row { display:flex; align-items:center; gap:10px; margin-top:8px; }
+.op-md .row img { width:24px; height:24px; flex:none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .op-md .row img.invert-d { filter:invert(1); } }
+:root[data-theme="dark"] .op-md .row img.invert-d { filter:invert(1); }
+.op-md .id b { display:block; font:600 14.5px/1.25 var(--font-mono); }
+.op-md .id small { display:block; font-size:12px; color:var(--muted); }
+.op-md .when { margin-left:auto; font-size:12px; color:var(--muted); text-align:right; }
+.op-badge { font-size:12px; font-weight:650; padding:2px 9px; border-radius:999px; background:var(--accent-wash); color:var(--accent); }
+.op-specs { margin-top:10px; }
+.op-specs .sp { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid var(--hair); font-size:13px; }
+.op-specs .sp .k { color:var(--muted); }
+.op-specs .sp .v { font:500 12.5px var(--font-mono); color:var(--ink); display:flex; align-items:center; gap:6px; text-align:right; }
+.op-specs .sp.chg .v { color:var(--ok); font-weight:650; }
+.op-chip { font:650 11px/1 var(--font-body); padding:3px 8px; border-radius:999px; background:var(--ok-wash); color:var(--ok); }
+
+/* 卡 2：动作与预览（沿用四态文案） */
+.op-act { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.op-act button { font:inherit; font-size:13px; font-weight:600; padding:8px 12px; border-radius:8px; border:1px solid var(--hair); background:var(--surface); color:var(--ink); cursor:pointer; }
+.op-act button.pri { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+.op-act button[aria-pressed="true"] { box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.op-stage { margin-top:12px; border-radius:12px; padding:14px 16px; background:var(--sunk); }
+.op-stage.done { box-shadow:inset 3px 0 0 var(--ok); }
+.op-stage .hint { font-size:13.5px; color:var(--muted); }
+.op-stage h4 { margin:0; font-size:14px; }
+.op-stage p { margin:6px 0 0; font-size:13.5px; color:var(--ink-2); }
+.op-diff { margin:10px 0 0; padding:10px 12px; border-radius:8px; border:1px solid var(--hair); background:var(--surface); font:12.5px/1.7 var(--font-mono); overflow-x:auto; }
+.op-diff span { display:block; margin:0 -12px; padding:0 12px; white-space:pre; }
+.op-diff .add { color:var(--ok); background:var(--ok-wash); }
+.op-diff .del { color:var(--bad); background:var(--bad-wash); }
+.op-stage .op-act { margin-top:10px; }
+.op-ok { color:var(--ok); font-weight:650; }
+.op-flow { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+.op-flow span { font-size:12px; padding:3px 10px; border-radius:999px; background:var(--sunk); color:var(--ink-2); }
+
+/* ops 手机适配 */
+@media (max-width:640px) {
+  .op-how { grid-template-columns:minmax(0,1fr); }
+  .op-notes { grid-template-columns:minmax(0,1fr); }
+  .op-steps { flex-wrap:wrap; row-gap:10px; }
+  .op-steps i { display:none; }
+  .op-steps .st { flex:1 1 40%; }
+  .op-pair { grid-template-columns:minmax(0,1fr); }
+  .op-pair .arrow { transform:rotate(90deg); justify-self:center; padding:4px 0; }
+}
+@media (max-width:560px) { .tl-track .seg b { display:none; } }
+
+/* final */
+.final { margin-top:110px; border-top:1px solid var(--hair); padding-block:72px; }
+.final .wrap { display:grid; gap:20px; justify-items:center; text-align:center; }
+.final h2 { font-size:clamp(28px, 3.8vw, 44px); font-weight:800; max-width:18em; }
+.final p { color:var(--ink-2); font-size:17px; max-width:36em; }
+footer { border-top:1px solid var(--hair); padding-block:24px 40px; color:var(--muted); font-size:13px; }
+footer .wrap { display:flex; flex-wrap:wrap; gap:8px 20px; justify-content:space-between; }
+footer a { color:var(--ink-2); }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.png" alt="" width="30" height="30">Model Gateway</a>
+    <nav class="nav-links" aria-label="Primary">
+      <a class="hide-sm" href="#views" data-i18n="nav.views">视图</a>
+      <a class="hide-sm" href="#activity" data-i18n="nav.activity">活跃度</a>
+      <a class="hide-sm" href="#privacy" data-i18n="nav.privacy">隐私</a>
+      <a data-repo href="https://github.com/summerway/model-gateway"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a>
+      <span class="lang" role="group" aria-label="Language">
+        <button type="button" id="lang-zh" data-lang="zh" aria-pressed="true">中</button>
+        <button type="button" id="lang-en" data-lang="en" aria-pressed="false">EN</button>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-copy">
+        <h1 data-i18n="hero.title">所有 AI 订阅，<span class="nb">一个地址。</span></h1>
+        <p class="lede" data-i18n="hero.lede">Claude、GPT、GLM、DeepSeek —— 按模型智能路由，额度用完自动切换，用量一处看全。</p>
+      </div>
+
+      <div class="win" id="topo-win">
+        <div class="win-body">
+          <div id="topo-mount"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="views">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="v.title">一个看板，八个视图</h2>
+        <p data-i18n="v.sub">点左侧切换，看看每天打开它会看到什么。</p>
+      </div>
+      <div id="views-mount"></div>
+    </div>
+  </section>
+
+  <section class="block" id="ops">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="o.title">窗口不空转，升级你拍板</h2>
+        <p data-i18n="o.sub">5 小时窗口一重置就续上下一个；有新模型时给你一张对比卡，换不换由你决定。</p>
+      </div>
+      <div class="ops">
+        <div class="card">
+          <h3 data-i18n="o.w5">5 小时窗口激活</h3>
+          <ol class="op-how">
+            <li data-i18n="o.s1">14:00 窗口重置</li>
+            <li data-i18n="o.s2">网关立刻代发 1 次最小请求</li>
+            <li data-i18n="o.s3">新的 5 小时从 14:00 起算</li>
+          </ol>
+          <div class="op-tl-scroll"><div class="op-tl" id="op-tl"></div></div>
+          <div class="op-concl">
+            <p data-i18n="o.concl">同样 18:10 用完，额度早 <b>1 小时 30 分</b> 恢复</p>
+            <button type="button" id="op-play" data-i18n="o.play">▶ 播放</button>
+          </div>
+          <ul class="op-notes">
+            <li data-i18n="o.n1">只在重置后 1 分钟内发一次，单次约几十 token</li>
+            <li data-i18n="o.n2">周额度用完时自动暂停，额度恢复后继续</li>
+            <li data-i18n="o.n3">等待期间的请求沿 fallback 链交给其它渠道</li>
+            <li data-i18n="o.n4">支持 GLM Coding、Codex、Claude 订阅（Claude 由真实的 Claude Code 代发）</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 data-i18n="o.upT">模型升级</h3>
+          <p class="sub" data-i18n="o.upS">每 24 小时对照 models.dev，发现同系列新版本或疑似退役，就放进「模型建议」。默认只提建议，不会自己改配置。</p>
+          <div class="op-steps" id="op-steps"></div>
+          <div class="op-sg" id="op-sg"></div>
+          <div class="op-stage" id="op-stage" aria-live="polite"></div>
+          <div class="op-flow">
+            <span data-i18n="o.f1">新待办发邮件摘要</span>
+            <span data-i18n="o.f2">同一个候选不重复提醒</span>
+            <span data-i18n="o.f3">也可以对 AI 说：「把 Codex 的 GPT-6 Sol 换成 6.1」</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="activity">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="a.title">一年的 AI 用量，一张图</h2>
+        <p data-i18n="a.sub">每个格子是一天，悬停看当天用了多少。</p>
+      </div>
+      <div id="activity-mount"></div>
+    </div>
+  </section>
+
+  <section class="block" id="talk">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="t.title">没有后台要管，跟 AI 说就行</h2>
+        <p data-i18n="t.sub">复杂的配置和管理都不存在：接入任意 AI 客户端，一句话完成配置、查询、开钥匙。</p>
+      </div>
+      <div class="split">
+        <div class="points">
+          <p style="font-size:15px;color:var(--ink-2)" data-i18n="t.pick">选一句话试试：</p>
+          <div class="prompts" role="group" aria-label="Example requests">
+            <button type="button" id="pr-0" data-p="0" aria-pressed="true" data-i18n="t.q0">把 DeepSeek 排到 GLM 前面</button>
+            <button type="button" id="pr-1" data-p="1" aria-pressed="false" data-i18n="t.q1">这周 Claude Code 用了多少？</button>
+            <button type="button" id="pr-2" data-p="2" aria-pressed="false" data-i18n="t.q2">给我的笔记应用开一把新钥匙</button>
+          </div>
+        </div>
+        <div class="card chat" id="chat" aria-live="polite"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="privacy">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="p.title">只数数字，不碰对话</h2>
+        <p data-i18n="p.line">装在你自己的设备上，不连接任何第三方统计。</p>
+      </div>
+      <div class="privacy">
+        <div class="card pv">
+          <h3 data-i18n="p.yes">会上报到你自己的网关</h3>
+          <ul>
+            <li data-i18n="p.y1">用了哪个模型、什么时间</li>
+            <li data-i18n="p.y2">输入、输出、缓存各多少 token</li>
+            <li data-i18n="p.y3">来自哪台电脑（名字由你自己起）</li>
+          </ul>
+          <details class="payload"><summary data-i18n="p.raw">看看实际发送的内容</summary>
+<pre>{
+  "source": "claude-code",
+  "device": "mac",
+  "events": [{
+    "eventId": "msg_01HZ…",
+    "model": "claude-sonnet-5-5",
+    "ts": "2026-11-03T06:12:09Z",
+    "input": 1820, "output": 412,
+    "cacheRead": 38211, "cacheWrite": 0
+  }]
+}</pre></details>
+        </div>
+        <div class="card pv no">
+          <h3 data-i18n="p.no">永远不会上报</h3>
+          <ul>
+            <li data-i18n="p.n1">你的提问、AI 的回答</li>
+            <li data-i18n="p.n2">代码和文件内容</li>
+            <li data-i18n="p.n3">项目路径、会话标题</li>
+            <li data-i18n="p.n4">任何 API 密钥或登录凭据</li>
+          </ul>
+        </div>
+      </div>
+      <div class="rules">
+        <div class="card rule"><h3 data-i18n="p.r1t">只用你自己的订阅</h3><p data-i18n="p.r1">只接你自己的账号，不共享、不转售。</p></div>
+        <div class="card rule"><h3 data-i18n="p.r2t">密钥不写进配置</h3><p data-i18n="p.r2">配置只写环境变量名，Claude 凭据只读。</p></div>
+        <div class="card rule"><h3 data-i18n="p.r3t">数据留在你手里</h3><p data-i18n="p.r3">存在本地数据库，明细 90 天后清理。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <h2 data-i18n="f.title">把散落的 AI 订阅，收拢到一个地址</h2>
+      <p data-i18n="f.p">开源、免费，装在你自己的设备上。</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" data-repo href="https://github.com/summerway/model-gateway" data-i18n="cta.repo">在 GitHub 查看</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 maplesnow · MIT License</span>
+    <span>Model prices from <a href="https://models.dev">models.dev</a></span>
+  </div>
+</footer>
+
+<script>
+// Runs after the deferred vendor scripts (MGTopology) and data.js (MGDemo) have executed.
+addEventListener('DOMContentLoaded', () => {
+// Public repo; every repo link reads from here.
+const REPO_URL = 'https://github.com/summerway/model-gateway';
+document.querySelectorAll('[data-repo]').forEach((a) => { a.href = REPO_URL; });
+
+/* ───────── i18n ───────── */
+const EN = {
+  'nav.views':'Views','nav.activity':'Activity','nav.privacy':'Privacy',
+  'hero.title':'All your AI subscriptions. <span class="nb">One address.</span>',
+  'hero.lede':'Claude, GPT, GLM, DeepSeek — smart routing by model, automatic failover when quota runs out, all usage in one place.',
+  'cta.repo':'View on GitHub',
+  'v.title':'One dashboard, eight views','v.sub':'Pick a view to see what you’d see every day.','v.pending':'A tour of the eight views will appear here.',
+  'o.title':'No idle windows. Upgrades on your call.','o.sub':'Each 5-hour window starts the moment the last one resets. When a newer model shows up you get a comparison card — you decide whether to switch.',
+  'o.w5':'5-hour window activation',
+  'o.s1':'14:00 window resets','o.s2':'Gateway sends one minimal request','o.s3':'The new 5 hours count from 14:00',
+  'o.concl':'Same 18:10 cut-off — quota is back <b>1h 30m</b> sooner','o.play':'▶ Play',
+  'o.n1':'Fires once within a minute of the reset, a few dozen tokens each time','o.n2':'Pauses automatically when the weekly quota is used up, resumes after it resets',
+  'o.n3':'While you wait, requests follow the fallback chain to other channels','o.n4':'Works with GLM Coding, Codex and Claude subscriptions (Claude via the real Claude Code CLI)',
+  'o.upT':'Model upgrades','o.upS':'Every 24 hours the gateway checks models.dev. A newer version in the same family, or a model that looks retired, becomes a model suggestion. By default it only suggests — it never edits your config on its own.',
+  'o.f1':'New items arrive as an email digest','o.f2':'The same candidate is never suggested twice','o.f3':'Or tell your AI: “switch Codex from GPT-6 Sol to 6.1”',
+  'a.title':'A year of AI usage, in one chart','a.sub':'Each square is a day. Hover for the numbers.','a.pending':'A year-long usage heatmap will appear here.',
+  't.title':'Nothing to manage. Just talk to your AI.','t.sub':'No complex ops or admin panels — plug in any AI client and do it all in one sentence.',
+  't.pick':'Pick a request:','t.q0':'Put DeepSeek ahead of GLM','t.q1':'How much did Claude Code use this week?','t.q2':'Make a new key for my note app',
+  'p.title':'Counts numbers. Never reads chats.','p.line':'Runs on your own machines. No third-party analytics.',
+  'p.yes':'Sent to your own gateway','p.y1':'Which model, and when','p.y2':'Input, output and cache token counts','p.y3':'Which computer (you choose the name)','p.raw':'See exactly what is sent',
+  'p.no':'Never sent','p.n1':'Your prompts or the AI’s replies','p.n2':'Code or file contents','p.n3':'Project paths or session titles','p.n4':'Any API key or login credential',
+  'p.r1t':'Only your own subscriptions','p.r1':'Only your own accounts. No sharing or reselling.',
+  'p.r2t':'Keys stay out of the config','p.r2':'Config holds env var names only; Claude credentials are read-only.',
+  'p.r3t':'Your data stays with you','p.r3':'Stored locally; details purged after 90 days.',
+  'f.title':'Bring every AI subscription to one address','f.p':'Open source, free, self-hosted.'
+};
+const ZH = {};
+document.querySelectorAll('[data-i18n]').forEach((n) => { ZH[n.dataset.i18n] ??= n.innerHTML; });
+let LANG = 'zh';
+const T = (zh, en) => (LANG === 'en' ? en : zh);
+const listeners = [];
+function setLang(lang) {
+  LANG = lang;
+  const dict = lang === 'en' ? EN : ZH;
+  document.querySelectorAll('[data-i18n]').forEach((n) => { const v = dict[n.dataset.i18n]; if (v != null) n.innerHTML = v; });
+  document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+  document.querySelectorAll('.lang button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === lang)));
+  try { localStorage.setItem('mg-lang', lang); } catch {}
+  MGDemo.setLang(lang); // notifies every MGDemo.onLang listener (MG22/MG23 views)
+  listeners.forEach((fn) => fn());
+}
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ───────── hero topology：真实看板拓扑模块 + NAS 模拟快照 ───────── */
+/* ── 品牌图标（与线上 dashboard 同源，原样复制：智谱/DeepSeek/OpenAI/Claude/百炼官方 mark） ── */
+const PICON = {"zhipu": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2ZXJzaW9uPSIxLjEiIHg9IjBweCIgeT0iMHB4IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCAzMCAzMDsiIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjEuMTcgMS4xNyAyNy42NiAyNy42NSI+CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+Cgkuc3Qwe29wYWNpdHk6MC4zO2ZpbGw6I0UyRTRFNzt9Cgkuc3Qxe29wYWNpdHk6MC44O2ZpbGw6I0UyRTRFNztzdHJva2U6I0ZGRkZGRjtzdHJva2Utd2lkdGg6NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3Qye2ZpbGw6dXJsKCNTVkdJRF8xXyk7fQoJLnN0M3tmaWxsOm5vbmU7c3Ryb2tlOiNFMEU0RTk7c3Ryb2tlLXdpZHRoOjAuMjU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0NHtmaWxsOm5vbmU7fQoJLnN0NXtmaWxsOiM5REExQTU7fQoJLnN0NntmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOm5vbmU7fQoJLnN0N3tmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiNERkUyRTc7fQoJLnN0OHtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiNDREQ0REE7fQoJLnN0OXtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiNCM0JDQzc7fQoJLnN0MTB7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojOURBQUI3O30KCS5zdDExe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6Izg2OThBODt9Cgkuc3QxMntmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfMl8pO30KCS5zdDEze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8zXyk7fQoJLnN0MTR7ZmlsbDojMUY2M0VDO30KCS5zdDE1e2ZpbGw6IzJEMkQyRDt9Cgkuc3QxNntmaWxsOm5vbmU7c3Ryb2tlOiNFMEU0RTk7c3Ryb2tlLXdpZHRoOjAuNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxN3tmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfNF8pO30KCS5zdDE4e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81Xyk7fQoJLnN0MTl7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MjB7ZmlsbDpub25lO3N0cm9rZTp1cmwoI1NWR0lEXzZfKTtzdHJva2Utd2lkdGg6MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QyMXtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfN18pO30KCS5zdDIye2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF84Xyk7fQoJLnN0MjN7ZmlsbDojRkZGRkZGO30KCS5zdDI0e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6IzJEMkQyRDt9Cgkuc3QyNXtjbGlwLXBhdGg6dXJsKCNTVkdJRF8xMF8pO30KCS5zdDI2e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzEyXyk7fQoJLnN0Mjd7ZmlsbDp1cmwoI1NWR0lEXzEzXyk7fQoJLnN0Mjh7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzE0Xyk7fQoJLnN0Mjl7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzE1Xyk7fQoJLnN0MzB7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTdfKTt9Cgkuc3QzMXtjbGlwLXBhdGg6dXJsKCNTVkdJRF8xOV8pO30KCS5zdDMye2ZpbGw6dXJsKCNTVkdJRF8yMF8pO30KCS5zdDMze2ZpbGw6bm9uZTtzdHJva2U6dXJsKCNTVkdJRF8yMV8pO3N0cm9rZS13aWR0aDoyO3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDM0e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8yMl8pO30KCS5zdDM1e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8yM18pO30KCS5zdDM2e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzI1Xyk7fQoJLnN0Mzd7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMjdfKTt9Cgkuc3QzOHtmaWxsOnVybCgjU1ZHSURfMjhfKTt9Cgkuc3QzOXtjbGlwLXBhdGg6dXJsKCNTVkdJRF8zMF8pO30KCS5zdDQwe2NsaXAtcGF0aDp1cmwoI1NWR0lEXzMyXyk7fQoJLnN0NDF7ZmlsbDp1cmwoI1NWR0lEXzMzXyk7fQoJLnN0NDJ7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMTI2RUY2O30KCS5zdDQze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6I0ZGRkZGRjt9Cgkuc3Q0NHtjbGlwLXBhdGg6dXJsKCNTVkdJRF8zNV8pO30KCS5zdDQ1e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzM3Xyk7fQoJLnN0NDZ7ZmlsbDp1cmwoI1NWR0lEXzM4Xyk7fQoJLnN0NDd7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojOURBMUE1O30KCS5zdDQ4e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8zOV8pO30KCS5zdDQ5e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80MF8pO30KCS5zdDUwe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80MV8pO30KCS5zdDUxe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80Ml8pO30KCS5zdDUye2ZpbGw6bm9uZTtzdHJva2U6dXJsKCNTVkdJRF80M18pO3N0cm9rZS13aWR0aDoyO3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDUze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6bm9uZTtzdHJva2U6I0UwRTRFOTtzdHJva2Utd2lkdGg6MC41O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDU0e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80NF8pO30KCS5zdDU1e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80NV8pO30KCS5zdDU2e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80Nl8pO30KCS5zdDU3e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80N18pO30KCS5zdDU4e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80OF8pO30KCS5zdDU5e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80OV8pO30KCS5zdDYwe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81MF8pO30KCS5zdDYxe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81MV8pO30KCS5zdDYye2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81Ml8pO30KCS5zdDYze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81M18pO30KCS5zdDY0e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzU1Xyk7fQoJLnN0NjV7Y2xpcC1wYXRoOnVybCgjU1ZHSURfNTdfKTt9Cgkuc3Q2NntmaWxsOnVybCgjU1ZHSURfNThfKTt9Cgkuc3Q2N3tjbGlwLXBhdGg6dXJsKCNTVkdJRF82MF8pO30KCS5zdDY4e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzYyXyk7fQoJLnN0Njl7ZmlsbDp1cmwoI1NWR0lEXzYzXyk7fQoJLnN0NzB7ZmlsbDpub25lO3N0cm9rZTp1cmwoI1NWR0lEXzY0Xyk7c3Ryb2tlLXdpZHRoOjI7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0NzF7Y2xpcC1wYXRoOnVybCgjU1ZHSURfNjZfKTt9Cgkuc3Q3MntjbGlwLXBhdGg6dXJsKCNTVkdJRF82OF8pO30KCS5zdDcze2ZpbGw6dXJsKCNTVkdJRF82OV8pO30KCS5zdDc0e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzcxXyk7fQoJLnN0NzV7Y2xpcC1wYXRoOnVybCgjU1ZHSURfNzNfKTt9Cgkuc3Q3NntmaWxsOnVybCgjU1ZHSURfNzRfKTt9Cgkuc3Q3N3tjbGlwLXBhdGg6dXJsKCNTVkdJRF83Nl8pO30KCS5zdDc4e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzc4Xyk7fQoJLnN0Nzl7ZmlsbDp1cmwoI1NWR0lEXzc5Xyk7fQoJLnN0ODB7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzgwXyk7fQoJLnN0ODF7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzgxXyk7fQoJLnN0ODJ7Y2xpcC1wYXRoOnVybCgjU1ZHSURfODNfKTt9Cgkuc3Q4M3tjbGlwLXBhdGg6dXJsKCNTVkdJRF84NV8pO30KCS5zdDg0e2ZpbGw6dXJsKCNTVkdJRF84Nl8pO30KCS5zdDg1e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF84N18pO30KCS5zdDg2e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF84OF8pO30KCS5zdDg3e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzkwXyk7fQoJLnN0ODh7Y2xpcC1wYXRoOnVybCgjU1ZHSURfOTJfKTt9Cgkuc3Q4OXtmaWxsOnVybCgjU1ZHSURfOTNfKTt9Cgkuc3Q5MHtmaWxsOm5vbmU7c3Ryb2tlOnVybCgjU1ZHSURfOTRfKTtzdHJva2Utd2lkdGg6MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3Q5MXtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfOTVfKTt9Cgkuc3Q5MntmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfOTZfKTt9Cgkuc3Q5M3tjbGlwLXBhdGg6dXJsKCNTVkdJRF85OF8pO30KCS5zdDk0e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzEwMF8pO30KCS5zdDk1e2ZpbGw6dXJsKCNTVkdJRF8xMDFfKTt9Cgkuc3Q5NntjbGlwLXBhdGg6dXJsKCNTVkdJRF8xMDNfKTt9Cgkuc3Q5N3tjbGlwLXBhdGg6dXJsKCNTVkdJRF8xMDVfKTt9Cgkuc3Q5OHtmaWxsOnVybCgjU1ZHSURfMTA2Xyk7fQoJLnN0OTl7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTA4Xyk7fQoJLnN0MTAwe2NsaXAtcGF0aDp1cmwoI1NWR0lEXzExMF8pO30KCS5zdDEwMXtmaWxsOnVybCgjU1ZHSURfMTExXyk7fQoJLnN0MTAye2ZpbGw6I0ZGRkZGRjtzdHJva2U6I0IzQkNDNztzdHJva2Utd2lkdGg6MC4yNzU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTAze2NsaXAtcGF0aDp1cmwoI1NWR0lEXzExM18pO30KCS5zdDEwNHtmaWxsOiNGREQxMzg7fQoJLnN0MTA1e2ZpbGw6I0ZDQTYyRjt9Cgkuc3QxMDZ7ZmlsbDojRkI3OTI3O30KCS5zdDEwN3tmaWxsOiNGNDRCMjI7fQoJLnN0MTA4e2ZpbGw6I0Q4MTkxNTt9Cgkuc3QxMDl7ZmlsbDojMkQyRDJEO3N0cm9rZTojRkZGRkZGO3N0cm9rZS13aWR0aDowLjMzNTQ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTEwe2ZpbGw6bm9uZTtzdHJva2U6IzY1NzI3RjtzdHJva2Utd2lkdGg6MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMTF7ZmlsbDpub25lO3N0cm9rZTojNjU3MjdGO3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDExMntmaWxsOnVybCgjU1ZHSURfMTE0Xyk7fQoJLnN0MTEze2ZpbGw6I0QwNkM1MDt9Cgkuc3QxMTR7ZmlsbDojMkQyRDJEO3N0cm9rZTojQjNCQ0M3O3N0cm9rZS13aWR0aDowLjI3NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMTV7b3BhY2l0eTowLjI7fQoJLnN0MTE2e2ZpbGw6bm9uZTtzdHJva2U6IzY3NzM4MDtzdHJva2Utd2lkdGg6MC4zNTY0O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDExN3tmaWxsOm5vbmU7c3Ryb2tlOiM2NzczODA7c3Ryb2tlLXdpZHRoOjAuMzU2NDtzdHJva2UtbWl0ZXJsaW1pdDoxMDtzdHJva2UtZGFzaGFycmF5OjEuMDIxMiwxLjAyMTI7fQoJLnN0MTE4e2ZpbGw6bm9uZTtzdHJva2U6IzY3NzM4MDtzdHJva2Utd2lkdGg6MC4zNTY0O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MS4wMjA1LDEuMDIwNTt9Cgkuc3QxMTl7b3BhY2l0eTowLjI7ZmlsbDpub25lO30KCS5zdDEyMHtmaWxsOm5vbmU7c3Ryb2tlOiM2NzczODA7c3Ryb2tlLXdpZHRoOjAuMzY4OTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMjF7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjM2ODk7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLWRhc2hhcnJheToxLjA1MDksMS4wNTA5O30KCS5zdDEyMntvcGFjaXR5OjAuMztmaWxsOiMxRjYzRUM7fQoJLnN0MTIze2ZpbGw6IzJEMkQyRDtzdHJva2U6I0ZGRkZGRjtzdHJva2Utd2lkdGg6MC4zMTYyO3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEyNHtmaWxsOiNGRkZGRkY7c3Ryb2tlOiNCM0JDQzc7c3Ryb2tlLXdpZHRoOjAuMzE2MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMjV7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTE4Xyk7fQoJLnN0MTI2e2ZpbGw6dXJsKCNTVkdJRF8xMTlfKTt9Cgkuc3QxMjd7ZmlsbDpub25lO3N0cm9rZTojREZFMkU3O3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEyOHtmaWxsOiM5REExQTU7c3Ryb2tlOiNGRkZGRkY7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTI5e2ZpbGw6dXJsKCNTVkdJRF8xMjBfKTt9Cgkuc3QxMzB7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEzMXtvcGFjaXR5OjAuNDt9Cgkuc3QxMzJ7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTIyXyk7fQoJLnN0MTMze2NsaXAtcGF0aDp1cmwoI1NWR0lEXzEyNF8pO30KCS5zdDEzNHtmaWxsOnVybCgjU1ZHSURfMTI1Xyk7fQoJLnN0MTM1e2ZpbGw6bm9uZTtzdHJva2U6IzgzOTJBMztzdHJva2Utd2lkdGg6MC4zNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMzZ7ZmlsbDpub25lO3N0cm9rZTojODM5MkEzO3N0cm9rZS13aWR0aDowLjM1O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MC45OTUxLDAuOTk1MTt9Cgkuc3QxMzd7ZmlsbDpub25lO3N0cm9rZTojODM5MkEzO3N0cm9rZS13aWR0aDowLjM1O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MS4wMDQsMS4wMDQ7fQoJLnN0MTM4e2ZpbGw6bm9uZTtzdHJva2U6dXJsKCNTVkdJRF8xMjZfKTtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEzOXtmaWxsOnVybCgjU1ZHSURfMTI3Xyk7fQoJLnN0MTQwe2ZpbGw6bm9uZTtzdHJva2U6I0RERTBFNDtzdHJva2Utd2lkdGg6MC4zNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNDF7ZmlsbDojMkQyRDJEO3N0cm9rZTojQTlCM0JFO3N0cm9rZS13aWR0aDowLjI3NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNDJ7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMTI2RUY0O30KCS5zdDE0M3tmaWxsOiNGRkZGRkY7c3Ryb2tlOiNCMUJBQzQ7c3Ryb2tlLXdpZHRoOjAuMjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE0NHtmaWxsOiNDRTZDNTA7fQoJLnN0MTQ1e2ZpbGw6IzVCNUI1Qjt9Cgkuc3QxNDZ7ZmlsbDojODM5MkEzO30KCS5zdDE0N3tmaWxsOm5vbmU7c3Ryb2tlOnVybCgjU1ZHSURfMTI4Xyk7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNDh7ZmlsbDp1cmwoI1NWR0lEXzEyOV8pO30KCS5zdDE0OXtmaWxsOm5vbmU7c3Ryb2tlOiNCNUJEQzQ7c3Ryb2tlLXdpZHRoOjAuNztzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNTB7b3BhY2l0eTowLjY7ZmlsbDpub25lO3N0cm9rZTojNzg4MzhFO3N0cm9rZS13aWR0aDowLjM1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE1MXtvcGFjaXR5OjAuMjtmaWxsOm5vbmU7c3Ryb2tlOiM4MzkyQTM7c3Ryb2tlLXdpZHRoOjAuMzU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLWRhc2hhcnJheToxLDE7fQoJLnN0MTUye2ZpbGw6bm9uZTtzdHJva2U6I0RERTBFNDtzdHJva2Utd2lkdGg6MC43NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNTN7ZmlsbDpub25lO3N0cm9rZTojODM5MkEzO3N0cm9rZS13aWR0aDowLjU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTU0e29wYWNpdHk6MC4yO2ZpbGw6bm9uZTtzdHJva2U6IzY3NzM4MDtzdHJva2Utd2lkdGg6MC4zNTY0O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MS4wMTgyLDEuMDE4Mjt9Cgkuc3QxNTV7ZmlsbDpub25lO3N0cm9rZTojRERFMEU0O3N0cm9rZS13aWR0aDowLjc2NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNTZ7ZmlsbDp1cmwoI1NWR0lEXzEzMF8pO30KCS5zdDE1N3tmaWxsOnVybCgjU1ZHSURfMTMxXyk7fQoJLnN0MTU4e2ZpbGw6I0IxQkFDNDt9Cgkuc3QxNTl7ZmlsbDojQ0JEMUQ4O30KCS5zdDE2MHtmaWxsOiMwQjFCMkI7fQoJLnN0MTYxe2ZpbGw6IzkxRDExOTt9Cgkuc3QxNjJ7b3BhY2l0eTowLjc7fQoJLnN0MTYze2ZpbGw6I0ZGRkZGRjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MC40NDE4O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE2NHtmaWxsOm5vbmU7c3Ryb2tlOiM5MzlDQUE7c3Ryb2tlLXdpZHRoOjAuMjIwOTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNjV7ZmlsbDpub25lO3N0cm9rZTojRkZGRkZGO3N0cm9rZS13aWR0aDozLjA5MjQ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTY2e2ZpbGw6dXJsKCNTVkdJRF8xMzJfKTt9Cgkuc3QxNjd7ZmlsbDpub25lO3N0cm9rZTp1cmwoI1NWR0lEXzEzM18pO3N0cm9rZS13aWR0aDoxLjcxNDtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNjh7ZmlsbDp1cmwoI1NWR0lEXzEzNF8pO30KCS5zdDE2OXtmaWxsOnVybCgjU1ZHSURfMTM1Xyk7fQoJLnN0MTcwe2ZpbGw6dXJsKCNTVkdJRF8xMzZfKTt9Cgkuc3QxNzF7ZmlsbDp1cmwoI1NWR0lEXzEzN18pO30KCS5zdDE3MntmaWxsOnVybCgjU1ZHSURfMTM4Xyk7fQoJLnN0MTcze2ZpbGw6dXJsKCNTVkdJRF8xMzlfKTt9Cgkuc3QxNzR7ZmlsbDp1cmwoI1NWR0lEXzE0MF8pO30KCS5zdDE3NXtmaWxsOnVybCgjU1ZHSURfMTQxXyk7fQoJLnN0MTc2e2ZpbGw6dXJsKCNTVkdJRF8xNDJfKTt9Cgkuc3QxNzd7ZmlsbDp1cmwoI1NWR0lEXzE0M18pO30KCS5zdDE3OHtmaWxsOnVybCgjU1ZHSURfMTQ0Xyk7fQoJLnN0MTc5e2ZpbGw6bm9uZTtzdHJva2U6IzFGNjNFQztzdHJva2Utd2lkdGg6NDtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxODB7ZmlsbDpub25lO3N0cm9rZTojMEIxQjJCO3N0cm9rZS13aWR0aDo0O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE4MXtmaWxsOm5vbmU7c3Ryb2tlOiM2NzczODA7c3Ryb2tlLXdpZHRoOjAuMzk4OTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxODJ7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjM5ODk7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLWRhc2hhcnJheToxLjE0LDEuMTQ7fQoJLnN0MTgze2ZpbGw6IzI1N0FGMTt9Cgkuc3QxODR7b3BhY2l0eTowLjM7ZmlsbDojRkZGRkZGO30KCS5zdDE4NXtmaWxsOm5vbmU7c3Ryb2tlOiM5OEE1QjI7c3Ryb2tlLXdpZHRoOjQ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTg2e2ZpbGw6bm9uZTtzdHJva2U6IzY1NzI3RjtzdHJva2Utd2lkdGg6MC4zOTg5O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE4N3tmaWxsOm5vbmU7c3Ryb2tlOiM2NTcyN0Y7c3Ryb2tlLXdpZHRoOjAuMzk4OTtzdHJva2UtbWl0ZXJsaW1pdDoxMDtzdHJva2UtZGFzaGFycmF5OjEuMTQsMS4xNDt9Cgkuc3QxODh7ZmlsbDpub25lO3N0cm9rZTojRERERkU0O3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE4OXtmaWxsOiM5QTlFQTI7fQoJLnN0MTkwe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6IzMyNjdBQzt9Cgkuc3QxOTF7ZmlsbDojRkZGRkZGO3N0cm9rZTojQUZCOEMzO3N0cm9rZS13aWR0aDowLjI3NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxOTJ7ZmlsbDojQzU2OTRFO30KCS5zdDE5M3tmaWxsOiM4MTkyQTI7fQoJLnN0MTk0e2ZpbGw6IzJEMkQyRDtzdHJva2U6I0ZGRkZGRjtzdHJva2Utd2lkdGg6MC42MzE3O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KPC9zdHlsZT4KPGcgaWQ9IuWbvuWxgl8yIj4KPC9nPgo8ZyBpZD0i5Zu+5bGCXzEiPgoJPHBhdGggY2xhc3M9InN0MTk0IiBkPSJNMjQuNTEsMjguNTFINS40OWMtMi4yMSwwLTQtMS43OS00LTRWNS40OWMwLTIuMjEsMS43OS00LDQtNGgxOS4wM2MyLjIxLDAsNCwxLjc5LDQsNHYxOS4wMyAgIEMyOC41MSwyNi43MiwyNi43MiwyOC41MSwyNC41MSwyOC41MXoiLz4KCTxnPgoJCTxnPgoJCQk8Zz4KCQkJCTxnPgoJCQkJCTxwYXRoIGNsYXNzPSJzdDIzIiBkPSJNMTUuNDcsNy4xbC0xLjMsMS44NWMtMC4yLDAuMjktMC41NCwwLjQ3LTAuOSwwLjQ3aC03LjFWNy4wOUM2LjE2LDcuMSwxNS40Nyw3LjEsMTUuNDcsNy4xeiIvPgoJCQkJCTxwb2x5Z29uIGNsYXNzPSJzdDIzIiBwb2ludHM9IjI0LjMsNy4xIDEzLjE0LDIyLjkxIDUuNywyMi45MSAxNi44Niw3LjEgICAgICAiLz4KCQkJCQk8cGF0aCBjbGFzcz0ic3QyMyIgZD0iTTE0LjUzLDIyLjkxbDEuMzEtMS44NmMwLjItMC4yOSwwLjU0LTAuNDcsMC45LTAuNDdoNy4wOXYyLjMzSDE0LjUzeiIvPgoJCQkJPC9nPgoJCQk8L2c+CgkJPC9nPgoJPC9nPgo8L2c+Cjwvc3ZnPg==", "openai": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iODAwIiB2aWV3Qm94PSIwIDAgMjQgMjQiPjxwYXRoIGQ9Ik0yMi4yODIgOS44MjFhNiA2IDAgMCAwLS41MTYtNC45MSA2LjA1IDYuMDUgMCAwIDAtNi41MS0yLjlBNi4wNjUgNi4wNjUgMCAwIDAgNC45ODEgNC4xOGE2IDYgMCAwIDAtMy45OTggMi45IDYuMDUgNi4wNSAwIDAgMCAuNzQzIDcuMDk3IDUuOTggNS45OCAwIDAgMCAuNTEgNC45MTEgNi4wNSA2LjA1IDAgMCAwIDYuNTE1IDIuOUE2IDYgMCAwIDAgMTMuMjYgMjRhNi4wNiA2LjA2IDAgMCAwIDUuNzcyLTQuMjA2IDYgNiAwIDAgMCAzLjk5Ny0yLjkgNi4wNiA2LjA2IDAgMCAwLS43NDctNy4wNzNNMTMuMjYgMjIuNDNhNC40OCA0LjQ4IDAgMCAxLTIuODc2LTEuMDRsLjE0MS0uMDgxIDQuNzc5LTIuNzU4YS44LjggMCAwIDAgLjM5Mi0uNjgxdi02LjczN2wyLjAyIDEuMTY4YS4wNy4wNyAwIDAgMSAuMDM4LjA1MnY1LjU4M2E0LjUwNCA0LjUwNCAwIDAgMS00LjQ5NCA0LjQ5NE0zLjYgMTguMzA0YTQuNDcgNC40NyAwIDAgMS0uNTM1LTMuMDE0bC4xNDIuMDg1IDQuNzgzIDIuNzU5YS43Ny43NyAwIDAgMCAuNzggMGw1Ljg0My0zLjM2OXYyLjMzMmEuMDguMDggMCAwIDEtLjAzMy4wNjJMOS43NCAxOS45NWE0LjUgNC41IDAgMCAxLTYuMTQtMS42NDZNMi4zNCA3Ljg5NmE0LjUgNC41IDAgMCAxIDIuMzY2LTEuOTczVjExLjZhLjc3Ljc3IDAgMCAwIC4zODguNjc3bDUuODE1IDMuMzU0LTIuMDIgMS4xNjhhLjA4LjA4IDAgMCAxLS4wNzEgMGwtNC44My0yLjc4NkE0LjUwNCA0LjUwNCAwIDAgMSAyLjM0IDcuODcyem0xNi41OTcgMy44NTUtNS44MzMtMy4zODdMMTUuMTE5IDcuMmEuMDguMDggMCAwIDEgLjA3MSAwbDQuODMgMi43OTFhNC40OTQgNC40OTQgMCAwIDEtLjY3NiA4LjEwNXYtNS42NzhhLjc5Ljc5IDAgMCAwLS40MDctLjY2N20yLjAxLTMuMDIzLS4xNDEtLjA4NS00Ljc3NC0yLjc4MmEuNzguNzggMCAwIDAtLjc4NSAwTDkuNDA5IDkuMjNWNi44OTdhLjA3LjA3IDAgMCAxIC4wMjgtLjA2MWw0LjgzLTIuNzg3YTQuNSA0LjUgMCAwIDEgNi42OCA0LjY2em0tMTIuNjQgNC4xMzUtMi4wMi0xLjE2NGEuMDguMDggMCAwIDEtLjAzOC0uMDU3VjYuMDc1YTQuNSA0LjUgMCAwIDEgNy4zNzUtMy40NTNsLS4xNDIuMDhMOC43MDQgNS40NmEuOC44IDAgMCAwLS4zOTMuNjgxem0xLjA5Ny0yLjM2NSAyLjYwMi0xLjUgMi42MDcgMS41djIuOTk5bC0yLjU5NyAxLjUtMi42MDctMS41WiIvPjwvc3ZnPg==", "deepseek": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMiIgZGF0YS1uYW1lPSJMYXllciAyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzcuMSAyNzcuODYiPgogIDxkZWZzPgogICAgPHN0eWxlPgogICAgICAuY2xzLTEgewogICAgICAgIGZpbGw6ICM0ZDZiZmU7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiAwcHg7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxnIGlkPSJMYXllcl8xLTIiIGRhdGEtbmFtZT0iTGF5ZXIgMSI+CiAgICA8cGF0aCBpZD0icGF0aCIgY2xhc3M9ImNscy0xIiBkPSJNMzczLjE1LDIzLjMyYy00LTEuOTUtNS43MiwxLjc3LTguMDYsMy42Ni0uNzkuNjItMS40NywxLjQzLTIuMTQsMi4xNC01Ljg1LDYuMjYtMTIuNjcsMTAuMzYtMjEuNTcsOS44Ni0xMy4wNC0uNzEtMjQuMTYsMy4zOC0zMy45OSwxMy4zNy0yLjA5LTEyLjMxLTkuMDQtMTkuNjYtMTkuNi0yNC4zOC01LjU0LTIuNDUtMTEuMTMtNC45LTE0Ljk5LTEwLjIzLTIuNzEtMy43OC0zLjQ0LTgtNC44MS0xMi4xNi0uODUtMi41MS0xLjcyLTUuMDktNC42LTUuNTItMy4xMy0uNS00LjM2LDIuMTQtNS41OCw0LjM0LTQuOTMsOC45OS02LjgyLDE4LjkyLTYuNjUsMjguOTcuNDMsMjIuNTgsOS45Nyw0MC41NiwyOC44OSw1My4zNywyLjE2LDEuNDYsMi43MSwyLjk1LDIuMDMsNS4wOS0xLjI5LDQuNC0yLjgyLDguNjgtNC4xOSwxMy4wOS0uODUsMi44Mi0yLjE0LDMuNDQtNS4xNSwyLjItMTAuMzktNC4zNC0xOS4zNy0xMC43Ni0yNy4yOS0xOC41NS0xMy40Ni0xMy4wMi0yNS42My0yNy40MS00MC44MS0zOC42Ny0zLjU3LTIuNjQtNy4xMi01LjA5LTEwLjgxLTcuNDEtMTUuNDktMTUuMDcsMi4wMy0yNy40NSw2LjA4LTI4LjksNC4yNS0xLjUyLDEuNDctNi43OS0xMi4yMy02LjczLTEzLjY5LjA2LTI2LjI0LDQuNjUtNDIuMjEsMTAuNzYtMi4zNC45My00Ljc5LDEuNjEtNy4zMiwyLjE0LTE0LjUtMi43My0yOS41NS0zLjM1LTQ1LjI5LTEuNTgtMjkuNjIsMy4zMi01My4yOCwxNy4zNC03MC42OCw0MS4yOEMxLjI5LDg4LjItMy42MywxMjAuODgsMi4zOSwxNTVjNi4zMywzNS45MSwyNC42NCw2NS42OCw1Mi44LDg4Ljk0LDI5LjE4LDI0LjEsNjIuOCwzNS45MSwxMDEuMTUsMzMuNjUsMjMuMjktMS4zMyw0OS4yMy00LjQ2LDc4LjQ4LTI5LjI0LDcuMzgsMy42NiwxNS4xMiw1LjEyLDI3Ljk3LDYuMjMsOS44OS45MywxOS40MS0uNSwyNi43OS0yLjAyLDExLjU1LTIuNDUsMTAuNzUtMTMuMTUsNi41OC0xNS4xMy0zMy44Ny0xNS43OC0yNi40NC05LjM2LTMzLjItMTQuNTQsMTcuMjEtMjAuNDEsNDMuMTUtNDEuNTksNTMuMy0xMTAuMTkuNzktNS40Ni4xMS04Ljg3LDAtMTMuMy0uMDYtMi42Ny41NC0zLjcyLDMuNjEtNC4wMyw4LjQ4LS45NiwxNi43Mi0zLjI5LDI0LjI4LTcuNDcsMjEuOTQtMTIsMzAuNzgtMzEuNjksMzIuODctNTUuMzMuMzEtMy42LS4wNi03LjM1LTMuODYtOS4yNFpNMTgxLjk2LDIzNS45N2MtMzIuODMtMjUuODMtNDguNzQtMzQuMzMtNTUuMzEtMzMuOTYtNi4xNC4zNC01LjA0LDcuMzgtMy42OSwxMS45NywxLjQxLDQuNTMsMy4yNiw3LjY2LDUuODUsMTEuNjMsMS43OCwyLjY0LDMuMDEsNi41Ny0xLjc4LDkuNDktMTAuNTcsNi41OC0yOC45NS0yLjItMjkuODItMi42NC0yMS4zOC0xMi41OS0zOS4yNi0yOS4yNC01MS44Ny01Mi4wMS0xMi4xNi0yMS45Mi0xOS4yMy00NS40My0yMC4zOS03MC41Mi0uMzEtNi4wOCwxLjQ3LTguMjIsNy40OS05LjMsNy45Mi0xLjQ2LDE2LjExLTEuNzcsMjQuMDMtLjYyLDMzLjQ5LDQuOSw2Mi4wMSwxOS45MSw4NS45LDQzLjYzLDEzLjY1LDEzLjU1LDIzLjk3LDI5LjcxLDM0LjYxLDQ1LjQ5LDExLjMsMTYuNzgsMjMuNDgsMzIuNzUsMzguOTcsNDUuODQsNS40Niw0LjU5LDkuODMsOC4wOSwxNCwxMC42Ny0xMi41OSwxLjQtMzMuNjIsMS43MS00Ny45OS05LjY4Wk0xOTcuNjksMTM0LjY1YzAtMi43LDIuMTUtNC44NCw0Ljg3LTQuODQuNiwwLDEuMTYuMTIsMS42Ni4zMS42Ny4yNSwxLjI5LjYyLDEuNzcsMS4xOC44Ny44NCwxLjM2LDIuMDgsMS4zNiwzLjM1LDAsMi43LTIuMTUsNC44NC00Ljg1LDQuODRzLTQuODEtMi4xNC00LjgxLTQuODRaTTI0Ni41NSwxNTkuNzdjLTMuMTMsMS4yNy02LjI2LDIuMzktOS4yNywyLjUxLTQuNjcuMjItOS43Ny0xLjY4LTEyLjU1LTQtNC4zLTMuNi03LjM2LTUuNjEtOC42Ny0xMS45NC0uNTQtMi43LS4yMy02Ljg1LjI1LTkuMjQsMS4xMi01LjE1LS4xMi04LjQ0LTMuNzQtMTEuNDQtMi45Ni0yLjQ1LTYuNy0zLjEtMTAuODItMy4xLTEuNTQsMC0yLjk1LS42OC00LTEuMjQtMS43Mi0uODctMy4xMy0zLjAxLTEuNzgtNS42NC40My0uODQsMi41My0yLjkyLDMuMDItMy4yOSw1LjU4LTMuMTksMTIuMDMtMi4xNCwxOCwuMjUsNS41NCwyLjI2LDkuNzEsNi40MiwxNS43MiwxMi4yOCw2LjE2LDcuMSw3LjI2LDkuMDksMTAuNzYsMTQuMzksMi43Niw0LjE5LDUuMjksOC40Nyw3LjAxLDEzLjM3LDEuMDQsMy4wNC0uMzEsNS41NS0zLjk0LDcuMVoiLz4KICA8L2c+Cjwvc3ZnPg==", "claude": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Crect%20width%3D%2224%22%20height%3D%2224%22%20rx%3D%225%22%20fill%3D%22%23D97757%22%2F%3E%3Cpath%20d%3D%22M12%205.5v13M5.5%2012h13M7.4%207.4l9.2%209.2M16.6%207.4l-9.2%209.2%22%20stroke%3D%22%23FCFCFB%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E", "bailian": "data:image/png;base64,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"};
+const AGENT_ICON = {"claudecode": "<svg class=\"agent-ico\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z\" fill=\"#D97757\" fill-rule=\"nonzero\"></path></svg>", "codex": "<svg class=\"agent-ico\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M21.55 10.004a5.416 5.416 0 00-.478-4.501c-1.217-2.09-3.662-3.166-6.05-2.66A5.59 5.59 0 0010.831 1C8.39.995 6.224 2.546 5.473 4.838A5.553 5.553 0 001.76 7.496a5.487 5.487 0 00.691 6.5 5.416 5.416 0 00.477 4.502c1.217 2.09 3.662 3.165 6.05 2.66A5.586 5.586 0 0013.168 23c2.443.006 4.61-1.546 5.361-3.84a5.553 5.553 0 003.715-2.66 5.488 5.488 0 00-.693-6.497v.001zm-8.381 11.558a4.199 4.199 0 01-2.675-.954c.034-.018.093-.05.132-.074l4.44-2.53a.71.71 0 00.364-.623v-6.176l1.877 1.069c.02.01.033.029.036.05v5.115c-.003 2.274-1.87 4.118-4.174 4.123zM4.192 17.78a4.059 4.059 0 01-.498-2.763c.032.02.09.055.131.078l4.44 2.53c.225.13.504.13.73 0l5.42-3.088v2.138a.068.068 0 01-.027.057L9.9 19.288c-1.999 1.136-4.552.46-5.707-1.51h-.001zM3.023 8.216A4.15 4.15 0 015.198 6.41l-.002.151v5.06a.711.711 0 00.364.624l5.42 3.087-1.876 1.07a.067.067 0 01-.063.005l-4.489-2.559c-1.995-1.14-2.679-3.658-1.53-5.63h.001zm15.417 3.54l-5.42-3.088L14.896 7.6a.067.067 0 01.063-.006l4.489 2.557c1.998 1.14 2.683 3.662 1.529 5.633a4.163 4.163 0 01-2.174 1.807V12.38a.71.71 0 00-.363-.623zm1.867-2.773a6.04 6.04 0 00-.132-.078l-4.44-2.53a.731.731 0 00-.729 0l-5.42 3.088V7.325a.068.068 0 01.027-.057L14.1 4.713c2-1.137 4.555-.46 5.707 1.513.487.833.664 1.809.499 2.757h.001zm-11.741 3.81l-1.877-1.068a.065.065 0 01-.036-.051V6.559c.001-2.277 1.873-4.122 4.181-4.12.976 0 1.92.338 2.671.954-.034.018-.092.05-.131.073l-4.44 2.53a.71.71 0 00-.365.623l-.003 6.173v.002zm1.02-2.168L12 9.25l2.414 1.375v2.75L12 14.75l-2.415-1.375v-2.75z\"></path></svg>", "openclaw": "<svg class=\"agent-ico\" viewBox=\"0 0 120 120\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z\" fill=\"#ef4444\"/><path d=\"M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z\" fill=\"#ef4444\"/><path d=\"M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z\" fill=\"#ef4444\"/><path d=\"M45 15 Q35 5 30 8\" stroke=\"#ff4d4d\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M75 15 Q85 5 90 8\" stroke=\"#ff4d4d\" stroke-width=\"3\" stroke-linecap=\"round\"/><circle cx=\"45\" cy=\"35\" r=\"6\" fill=\"#050810\"/><circle cx=\"75\" cy=\"35\" r=\"6\" fill=\"#050810\"/><circle cx=\"46\" cy=\"34\" r=\"2.5\" fill=\"#00e5cc\"/><circle cx=\"76\" cy=\"34\" r=\"2.5\" fill=\"#00e5cc\"/></svg>", "pi": "<svg class=\"agent-ico\" viewBox=\"0 0 800 800\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"#F09082\" d=\"M165.29 165.29H517.36V400H400V282.65H165.29Z\"/><path fill=\"#4D9ABF\" d=\"M165.29 282.65H282.65V400H400V517.36H282.65V634.72H165.29Z\"/><path fill=\"#F1BE58\" d=\"M517.36 400H634.72V634.72H517.36Z\"/></svg>"};
+const provIcon = (p) => {
+  const hay = `${p?.id ?? ''} ${p?.name ?? ''} ${p?.badge ?? ''}`.toLowerCase();
+  if (p?.type === 'glm') return { src: PICON.zhipu, cls: '' };
+  if (p?.type === 'codex') return { src: PICON.openai, cls: 'invert-d' };
+  if (p?.type === 'claude') return { src: PICON.claude, cls: '' };
+  if (p?.type === 'dashscope') return { src: PICON.bailian, cls: '' };
+  if (p?.type === 'openai') return hay.includes('deepseek') ? { src: PICON.deepseek, cls: '' } : { src: PICON.openai, cls: 'invert-d' };
+  return { src: PICON.openai, cls: 'invert-d' };
+};
+// 模型 id 展示时把尾部的 major-minor 版本号换成点（claude-opus-5-5 → claude-opus-5.5）
+const modelLabel = (id) => String(id ?? '').replace(/-(\d+)-(\d+)$/, '-$1.$2');
+
+/* 英文模式经 helpers.labels 覆盖拓扑文案；中文走模块默认 */
+const EN_TOPO_LABELS = {
+  title: 'Routing',
+  modeGroup: 'Traffic demo mode',
+  modes: {
+    multi: ['Concurrent', 'Random concurrent traffic from many sources'],
+    serial: ['Serial', 'One source at a time, full path'],
+  },
+  demo: 'Simulated',
+  play: 'Play simulation',
+  pause: 'Pause simulation',
+  svgLabel: 'Sources, gateway, channels and models',
+  chainTip: 'Fallback chain: same-color pills and dashed arcs form one chain',
+  device: { mac: 'Mac', nas: 'NAS', unknown: 'Unknown' },
+  apps: 'Apps',
+  gateway: 'Gateway',
+  collector: (label) => `Usage collector (${label})`,
+  chainOf: (id) => `fallback chain ${id}`,
+  chainMember: (names) => ` (${names.join(', ')} member)`,
+  fallback: (from, provider, rewrite) => `${from} falls back → ${provider}${rewrite != null ? ` (as ${rewrite})` : ''}`,
+};
+
+/* NAS 真实部署结构的模拟快照（不含任何私人项目名） */
+function nasTopology(lang) {
+  const en = lang === 'en';
+  const z1 = en ? 'Zhipu 1' : '智谱 1';
+  const z2 = en ? 'Zhipu 2' : '智谱 2';
+  const bl = en ? 'Alibaba Bailian' : '阿里云百炼';
+  const chain53 = [
+    { providerId: 'glm-primary', provider: z1, model: 'glm-5.3' },
+    { providerId: 'glm-backup', provider: z2, model: 'glm-5.3' },
+  ];
+  const chainFlash = [
+    { providerId: 'glm-primary', provider: z1, model: 'glm-5.3-flash' },
+    { providerId: 'glm-backup', provider: z2, model: 'glm-5.3-flash' },
+    { providerId: 'deepseek', provider: 'DeepSeek', model: 'deepseek-flash' },
+  ];
+  const self = (providerId, provider, model) => [{ providerId, provider, model }];
+  return {
+    providers: [
+      { id: 'glm-primary', name: z1, type: 'glm', models: [{ id: 'glm-5.3', chain: chain53 }, { id: 'glm-5.3-flash', chain: chainFlash }] },
+      { id: 'glm-backup', name: z2, type: 'glm', models: [{ id: 'glm-5.3', chain: chain53 }, { id: 'glm-5.3-flash', chain: chainFlash }] },
+      { id: 'deepseek', name: 'DeepSeek', type: 'openai', models: [{ id: 'deepseek-flash', chain: self('deepseek', 'DeepSeek', 'deepseek-flash') }, { id: 'deepseek-v4-pro', chain: self('deepseek', 'DeepSeek', 'deepseek-v4-pro') }] },
+      { id: 'codex', name: 'OpenAI', type: 'codex', models: [{ id: 'gpt-6-sol', chain: self('codex', 'OpenAI', 'gpt-6-sol') }, { id: 'gpt-6-luna', chain: self('codex', 'OpenAI', 'gpt-6-luna') }] },
+      { id: 'claude', name: 'Claude', type: 'claude', monitor: true, models: [
+        { id: 'claude-opus-5-5', chain: self('claude', 'Claude', 'claude-opus-5-5') },
+        { id: 'claude-sonnet-5-5', chain: self('claude', 'Claude', 'claude-sonnet-5-5') },
+        { id: 'claude-haiku-5-5', chain: self('claude', 'Claude', 'claude-haiku-5-5') },
+      ] },
+      { id: 'dashscope', name: bl, type: 'dashscope', monitor: true, routable: true, models: [{ id: 'text-embedding-v4', chain: self('dashscope', bl, 'text-embedding-v4') }] },
+    ],
+    agents: [
+      { app: 'claude-code', iconKind: 'claudecode', location: 'local' },
+      { app: 'codex', iconKind: 'codex', location: 'local' },
+      { app: 'mac-pi', iconKind: 'pi', location: 'local' },
+      { app: 'openclaw', iconKind: 'openclaw', location: 'cloud' },
+      { app: 'pi-agent', iconKind: 'pi', location: 'cloud' },
+    ],
+    keys: [
+      { app: 'claude-code' }, { app: 'codex' }, { app: 'mac-pi' }, { app: 'openclaw' }, { app: 'pi-agent' },
+      { app: 'kb' }, { app: 'bookmarks' }, { app: 'nightly' }, { app: 'skills' }, { app: 'game' },
+    ],
+    topology: {
+      appGroups: [
+        { id: 'knowledge', label: en ? 'Knowledge' : '知识与内容', icon: 'knowledge', apps: ['kb', 'bookmarks'] },
+        { id: 'automation', label: en ? 'Automation' : '自动化', icon: 'automation', apps: ['nightly', 'skills'] },
+        { id: 'business', label: en ? 'Apps' : '业务应用', icon: 'business', apps: ['game'] },
+      ],
+      collectors: [{ id: 'mac-sync', label: en ? 'Mac usage sync' : 'Mac 用量采集' }],
+      directConnections: [
+        { app: 'claude-code', device: 'mac', providerId: 'claude', collectorId: 'mac-sync' },
+        { app: 'codex', device: 'mac', providerId: 'codex-local', collectorId: 'mac-sync' },
+      ],
+    },
+  };
+}
+
+const topoEl = document.getElementById('topo-mount');
+let topoMounted = false;
+function topoHelpers() {
+  return {
+    provider: (p) => { const i = provIcon(p); return { href: i.src, invert: i.cls.includes('invert-d') }; },
+    agent: (k) => AGENT_ICON[k] ?? '',
+    model: modelLabel,
+    labels: LANG === 'en' ? EN_TOPO_LABELS : undefined,
+  };
+}
+function renderTopo() {
+  const data = nasTopology(LANG);
+  topoEl.innerHTML = MGTopology.html(data, topoHelpers());
+  MGTopology.mount(data, renderTopo);
+  topoMounted = true;
+}
+// 切换语言：先停掉旧实例的粒子与观察器，再按新语言重建快照
+listeners.push(() => { if (topoMounted) { MGTopology.stop(); renderTopo(); } });
+
+/* ───────── chat ───────── */
+const CONVOS = [
+  () => [
+    ['user', T('把 DeepSeek 排到 GLM 前面', 'Put DeepSeek ahead of GLM')],
+    ['ai', T('好的，Claude Code 的渠道顺序会这样改：', 'Sure. Claude Code’s provider order will change like this:') + '<div class="diff"><span class="del">- 1. GLM Coding Plan   2. DeepSeek</span>\n<span class="add">+ 1. DeepSeek   2. GLM Coding Plan</span></div>' + T('确认后我再应用，之后也能一键撤回。', 'I’ll apply it once you confirm, and it can be undone in one step.')],
+    ['user', T('确认', 'Confirm')],
+    ['ai', T('已生效。接下来的请求会先找 DeepSeek。', 'Done. New requests will try DeepSeek first.')],
+  ],
+  () => [
+    ['user', T('这周 Claude Code 用了多少？', 'How much did Claude Code use this week?')],
+    ['ai', T('这周 Claude Code 一共用了 4,210 万 tokens，按官方价格折算约 $38.60。macbook 占 72%，windows-pc 占 28%，周三用得最多。', 'This week Claude Code used 42.1M tokens, about $38.60 at official prices. 72% came from macbook and 28% from windows-pc; Wednesday was the busiest day.')],
+    ['user', T('比上周多吗？', 'More than last week?')],
+    ['ai', T('多了 18%，主要是周三那天的长会话。', 'Up 18%, mostly from one long session on Wednesday.')],
+  ],
+  () => [
+    ['user', T('给我的笔记应用开一把新钥匙', 'Make a new key for my note app')],
+    ['ai', T('我会新增一把叫「notes」的钥匙，它的用量会单独统计：', 'I’ll add a key called “notes”, with its usage tracked separately:') + T('<div class="diff"><span class="add">+ 应用: notes</span>\n<span class="add">+ 钥匙: 读取环境变量 GATEWAY_KEY_NOTES</span></div>', '<div class="diff"><span class="add">+ App: notes</span>\n<span class="add">+ Key: read from env GATEWAY_KEY_NOTES</span></div>') + T('钥匙的真实值只放在环境变量里，不会写进配置文件。要应用吗？', 'The real key lives only in an environment variable, never in the config file. Apply it?')],
+  ],
+];
+let convo = 0, chatTimer = [];
+function renderChat(instant) {
+  chatTimer.forEach(clearTimeout); chatTimer = [];
+  const box = document.getElementById('chat');
+  const build = () => {
+    box.innerHTML = '';
+    CONVOS[convo]().forEach(([who, html], i) => {
+      const m = document.createElement('div');
+      m.className = 'msg ' + who + (i === 0 ? ' no-rise' : '');
+      m.innerHTML = html;
+      if (instant || reduced || i === 0) box.appendChild(m);
+      else chatTimer.push(setTimeout(() => box.appendChild(m), i * 900));
+    });
+    box.classList.remove('swap');
+  };
+  // 切换：先整体淡出旧对话，再重建；首条消息静态渲染，不重播 rise 动画，避免「跳一下」
+  if (instant || reduced || !box.childElementCount) { build(); return; }
+  box.classList.add('swap');
+  chatTimer.push(setTimeout(build, 180));
+}
+document.querySelectorAll('[data-p]').forEach((b) => b.addEventListener('click', () => {
+  convo = +b.dataset.p;
+  document.querySelectorAll('[data-p]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  renderChat();
+}));
+renderChat(true);
+listeners.push(() => renderChat(true));
+
+/* ───────── language bootstrap ───────── */
+let initial = 'zh';
+const qs = new URLSearchParams(location.search).get('lang');
+if (qs === 'en' || qs === 'zh') initial = qs;
+else { try { const s = localStorage.getItem('mg-lang'); if (s === 'en' || s === 'zh') initial = s; } catch {} }
+/* ───────── ops：5h 窗口激活（并排时间轴 + 播放演示）+ 模型升级（步骤条 + 新旧对照），纯本地状态 ───────── */
+const OPS = { act: null, phase: 'idle' };
+const pct = (h) => `${((h - 8) / 16) * 100}%`;
+const span = (a, b) => `left:${pct(a)};width:${((b - a) / 16) * 100}%`;
+const OUT = 18 + 1 / 6; // 18:10 额度用尽
+const hclock = (h) => { const m = Math.round(h * 60); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+
+// 两条时间轴同时显示：窗口块 / 空转 / 代发 ⚡ / 用尽后的等待 / 右端结果标签
+const TL_ROWS = [
+  { lab: ['不激活', 'No activation'], win: [[9, 14], [15.5, 20.5]], idle: [14, 15.5], pings: [], wait: [OUT, 20.5],
+    res: ['20:30 才恢复', 'Back at 20:30'], bad: true },
+  { lab: ['网关激活', 'Gateway activation'], win: [[9, 14], [14, 19], [19, 24]], idle: null, pings: [14, 19], wait: [OUT, 19],
+    res: ['19:00 恢复', 'Back at 19:00'], bad: false },
+];
+let playGen = 0; // 播放代次：重绘 / 切语言 / 再次点击都会让旧的 rAF 停下并复位
+
+function renderOpsTimeline() {
+  playGen++;
+  const rows = TL_ROWS.map((r, ri) => {
+    const win = r.win.map(([a, b]) => `<span class="op-blk wn" style="${span(a, b)}"></span>`).join('');
+    const idle = r.idle
+      ? `<span class="op-blk idle"${ri === 0 ? ' data-idle' : ''} style="${span(...r.idle)}"><span class="s">${T('空转', 'Idle')}</span><span class="l">${T('重置后没人请求，窗口没开', 'No request after reset — window never opened')}</span></span>`
+      : '';
+    const wait = `<span class="op-blk wait" style="${span(...r.wait)}"></span>`;
+    // 「你的使用」示意：两行共用同一条，画在窗口块下半部分的细条
+    const use = [span(9, 12), span(15.5, OUT)].map((s) => `<span class="op-use" style="${s}"></span>`).join('');
+    const pings = r.pings.map((h) => `<span class="op-ping" style="left:${pct(h)}"${h === 14 ? ' data-p14' : ''} title="${T('网关发出 1 次最小请求', 'Gateway sends one minimal request')}"></span>`).join('');
+    const quota = `<span class="op-quota" style="left:${pct(OUT)}"></span>`;
+    const quotaLab = ri === 0 ? `<span class="op-quota-lab" style="left:${pct(OUT)}">${T('额度用尽 18:10', 'Out of quota 18:10')}</span>` : '';
+    const ph = `<span class="op-ph" data-ph style="left:${pct(8)}">${ri === 0 ? '<span class="t" data-clock>08:00</span>' : ''}</span>`;
+    return `<span class="lab">${T(...r.lab)}</span>
+      <div class="op-track">${win}${idle}${wait}${use}${pings}${quota}${quotaLab}${ph}</div>
+      <span class="op-res ${r.bad ? 'bad' : 'ok'}">${T(...r.res)}</span>`;
+  }).join('');
+  document.getElementById('op-tl').innerHTML = `${rows}
+    <span class="lab ax"></span>
+    <div class="op-axis">${['08:00', '12:00', '16:00', '20:00', '24:00'].map((h, i) => `<span style="left:${i * 25}%">${h}</span>`).join('')}</div><span></span>`;
+}
+
+function opPlayhead(h) {
+  const tl = document.getElementById('op-tl');
+  tl.querySelectorAll('[data-ph]').forEach((p) => { p.style.left = pct(h); });
+  const c = tl.querySelector('[data-clock]');
+  if (c) {
+    c.textContent = hclock(h);
+    const f = (h - 8) / 16; // 两端贴边时避免钟点标签被滚动容器裁掉
+    c.style.transform = f < 0.04 ? 'none' : f > 0.96 ? 'translateX(-100%)' : 'translateX(-50%)';
+  }
+}
+
+// 经过 14:00：「网关激活」行的 ⚡ 闪一下并短暂出现「代发 1 次请求」，同时高亮「不激活」行的空转块
+function opFlash14(gen) {
+  const tl = document.getElementById('op-tl');
+  const ping = tl.querySelector('[data-p14]');
+  const idle = tl.querySelector('[data-idle]');
+  ping.classList.add('hit');
+  idle.classList.add('hl');
+  const lab = document.createElement('span');
+  lab.className = 'op-ping-lab';
+  lab.textContent = T('代发 1 次请求', '1 request sent');
+  ping.appendChild(lab);
+  setTimeout(() => { if (gen !== playGen) return; ping.classList.remove('hit'); idle.classList.remove('hl'); lab.remove(); }, 1600);
+}
+
+document.getElementById('op-play').addEventListener('click', () => {
+  const gen = ++playGen; // 再次点击：重置后重新播放
+  const tl = document.getElementById('op-tl');
+  tl.querySelectorAll('[data-ph]').forEach((p) => p.classList.add('run'));
+  if (reduced) { opPlayhead(24); return; } // prefers-reduced-motion：不做动画，直接跳到结束状态
+  tl.classList.add('playing');
+  const t0 = performance.now();
+  let flashed = false;
+  const step = (now) => {
+    if (gen !== playGen) return;
+    const p = Math.min(1, (now - t0) / 6000); // 6 秒从 08:00 扫到 24:00
+    const h = 8 + 16 * p;
+    opPlayhead(h);
+    if (!flashed && h >= 14) { flashed = true; opFlash14(gen); }
+    if (p < 1) requestAnimationFrame(step);
+    else tl.classList.remove('playing');
+  };
+  requestAnimationFrame(step);
+});
+
+// 模型升级步骤条：初始 → 2 你决定；点了任一动作 → 3 预览；确认落地 → 4；放弃走到 3 后第 4 步改「已放弃」
+function renderOpsSteps() {
+  const dismissed = OPS.act === 'dismiss' && OPS.phase !== 'idle';
+  const cur = OPS.phase === 'idle' ? 2 : OPS.phase === 'preview' ? 3 : 4;
+  const labels = [T('发现', 'Found'), T('你决定', 'You decide'), T('预览改动', 'Preview'),
+    dismissed ? T('已放弃', 'Dismissed') : T('落地 · 可回滚', 'Applied · reversible')];
+  document.getElementById('op-steps').innerHTML = labels.map((l, i) => {
+    const cls = i + 1 < cur ? 'did' : i + 1 === cur ? 'on' : '';
+    return `${i ? `<i${i < cur ? ' class="did"' : ''}></i>` : ''}<span class="st ${cls}" data-n="${i + 1}">${l}</span>`;
+  }).join('');
+}
+
+// 新旧对照：字段照看板「网关 › 模型建议」；数值取自 models.dev（2026-11-04，GPT-6 Sol → GPT-6.1 Sol）
+function renderOpsSuggestion() {
+  const specs = [
+    { k: T('发布', 'Released'), cur: '2026-09-22', found: '2026-09-29', chip: T('更新', 'Newer') },
+    { k: T('输入 / 输出价格（每百万）', 'In / out (per M)'), cur: '$2 / $10', found: '$2 / $10' },
+    { k: T('缓存读取（每百万）', 'Cache read (per M)'), cur: '$0.20', found: '$0.10', chip: '−50%' },
+    { k: T('上下文', 'Context'), cur: '1,050,000', found: '1,050,000' },
+  ];
+  const rowsFor = (found) => specs.map((s) => `<div class="sp${found && s.chip ? ' chg' : ''}"><span class="k">${s.k}</span><span class="v">${found ? s.found : s.cur}${found && s.chip ? `<i class="op-chip">${s.chip}</i>` : ''}</span></div>`).join('');
+  const block = (tag, name, rows, badge, when) => `
+    <div class="op-md">
+      <div class="head"><span class="tag">${tag}</span>${badge ? `<span class="op-badge">${badge}</span>` : ''}</div>
+      <div class="row"><img src="${PICON.openai}" alt="" class="invert-d"><span class="id"><b>${name}</b><small>${T('渠道 Codex', 'Codex')}</small></span>${when ? `<span class="when">${when}</span>` : ''}</div>
+      <div class="op-specs">${rows}</div>
+    </div>`;
+  document.getElementById('op-sg').innerHTML = `
+    <div class="op-pair">
+      ${block(T('现有', 'Current'), 'GPT-6 Sol', rowsFor(false))}
+      <span class="arrow">→</span>
+      ${block(T('发现', 'Found'), 'GPT-6.1 Sol', rowsFor(true), T('升级', 'Upgrade'), T('今天 09:12 发现', 'Found today 09:12'))}
+    </div>
+    <div class="op-act">${[['add', T('添加并保留旧版', 'Add, keep old'), 'pri'], ['replace', T('替换旧版', 'Replace old'), ''], ['dismiss', T('放弃', 'Dismiss'), '']]
+      .map(([k, l, c]) => `<button type="button" class="${c}" data-opact="${k}" aria-pressed="${OPS.act === k && OPS.phase !== 'idle'}">${l}</button>`).join('')}</div>`;
+  document.querySelectorAll('[data-opact]').forEach((b) => b.addEventListener('click', () => { OPS.act = b.dataset.opact; OPS.phase = 'preview'; renderOps(); }));
+}
+function renderOpsStage() {
+  const el = document.getElementById('op-stage');
+  el.classList.toggle('done', OPS.phase === 'done' && OPS.act !== 'dismiss'); // 落地成功：左侧 3px --ok 竖线
+  const btn = (k, l, pri) => `<button type="button" class="${pri ? 'pri' : ''}" data-opstep="${k}">${l}</button>`;
+  const diff = OPS.act === 'add'
+    ? [['', '    - gpt-6-sol'], ['add', '+   - gpt-6.1-sol'], ['', '    - gpt-6-luna']]
+    : [['del', '-   - gpt-6-sol'], ['add', '+   - gpt-6.1-sol'], ['', '    - gpt-6-luna']];
+  if (OPS.phase === 'idle') {
+    el.innerHTML = `<p class="hint">${T('点上面任一按钮，看它会对配置做什么。', 'Pick an action above to see what it would change.')}</p>`;
+  } else if (OPS.phase === 'preview' && OPS.act === 'dismiss') {
+    el.innerHTML = `<h4>${T('预览 · 放弃', 'Preview · Dismiss')}</h4><p>${T('不改配置。这个候选以后不会再提醒。', 'No config change. This candidate won’t be suggested again.')}</p>
+      <div class="op-act">${btn('apply', T('确认', 'Confirm'), true)}${btn('back', T('返回', 'Back'))}</div>`;
+  } else if (OPS.phase === 'preview') {
+    el.innerHTML = `<h4>${T('预览 · 将修改 Codex 的模型列表', 'Preview · Codex model list will change')}</h4>
+      <div class="op-diff"><span>  models:</span>${diff.map(([c, t]) => `<span class="${c}">${t}</span>`).join('')}</div>
+      <div class="op-act">${btn('apply', T('确认落地', 'Apply'), true)}${btn('back', T('返回', 'Back'))}</div>`;
+  } else if (OPS.act === 'dismiss') {
+    el.innerHTML = `<p class="op-ok">✓ ${T('已放弃，不再提醒', 'Dismissed — won’t be suggested again')}</p><div class="op-act">${btn('back', T('重新演示', 'Start over'))}</div>`;
+  } else {
+    el.innerHTML = `<p class="op-ok">✓ ${T('已写入配置并热加载', 'Written and hot-reloaded')}</p>
+      <p>${T('修改前的配置已备份；GPT-6.1 Sol 立即可用于路由。', 'The previous config was backed up; GPT-6.1 Sol is routable right away.')}</p>
+      <div class="op-act">${btn('rollback', T('回滚', 'Roll back'), true)}</div>`;
+  }
+  el.querySelectorAll('[data-opstep]').forEach((b) => b.addEventListener('click', () => {
+    const k = b.dataset.opstep;
+    if (k === 'apply') OPS.phase = 'done';
+    else if (k === 'rollback') { OPS.phase = 'idle'; OPS.act = null; renderOps(); document.getElementById('op-stage').innerHTML = `<p class="op-ok">↺ ${T('已回滚到修改前的配置', 'Rolled back to the previous config')}</p>`; return; }
+    else { OPS.phase = 'idle'; OPS.act = null; }
+    renderOps();
+  }));
+}
+function renderOps() { renderOpsTimeline(); renderOpsSteps(); renderOpsSuggestion(); renderOpsStage(); }
+renderOps();
+listeners.push(renderOps);
+
+if (initial !== 'zh') setLang(initial);
+document.querySelectorAll('.lang button').forEach((b) => b.addEventListener('click', () => setLang(b.dataset.lang)));
+
+renderTopo();
+});
+</script>
+</body>
+</html>

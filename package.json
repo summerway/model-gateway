@@ -1,0 +1,73 @@
+{
+  "name": "@maplesnow/model-gateway",
+  "version": "0.1.0",
+  "description": "Self-hosted LLM gateway: one endpoint for your AI subscriptions and APIs, ordered fallback, quota tracking, usage dashboard and an Admin API for AI-driven management.",
+  "keywords": [
+    "llm",
+    "gateway",
+    "proxy",
+    "openai",
+    "anthropic",
+    "claude-code",
+    "codex",
+    "fallback",
+    "usage",
+    "self-hosted"
+  ],
+  "author": "maplesnow",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/summerway/model-gateway.git"
+  },
+  "homepage": "https://github.com/summerway/model-gateway#readme",
+  "bugs": {
+    "url": "https://github.com/summerway/model-gateway/issues"
+  },
+  "type": "module",
+  "main": "src/server.js",
+  "bin": {
+    "model-gateway": "bin/model-gateway.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "scripts/config-check.js",
+    "scripts/mac-usage-sync.js",
+    "config/config.example.yaml",
+    "config/config.schema.json",
+    "docs/install.md",
+    "docs/mac-observed-usage.md",
+    "docs/codex.md",
+    "docs/collect.md",
+    "docs/providers.md",
+    "docs/openapi.json",
+    "docs/schemas/observed-event.json",
+    "scripts/config-migrate.js",
+    "scripts/api.js",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test 'test/*.test.js'",
+    "lint": "node --check src/config.js && node --check src/config-schema.js && node --check src/dashboard/serve.js && node --check src/dashboard/topology.js && node --check src/events.js && node --check src/gateway/chain.js && node --check src/gateway/embeddings.js && node --check src/gateway/fallback/circuit.js && node --check src/gateway/fallback/engine.js && node --check src/gateway/providers/codex/client.js && node --check src/gateway/providers/codex/convert.js && node --check src/gateway/providers/codex/index.js && node --check src/gateway/providers/codex/oauth.js && node --check src/gateway/providers/codex/responses-convert.js && node --check src/gateway/providers/codex/token-manager.js && node --check src/gateway/providers/registry.js && node --check src/gateway/router.js && node --check src/gateway/vision-routing.js && node --check src/http.js && node --check src/auth.js && node --check src/monitor/agent-endpoints.js && node --check src/monitor/claude-local.js && node --check src/monitor/claude-usage-sync.js && node --check src/monitor/observed-push.js && node --check src/monitor/codex-local.js && node --check src/monitor/extract.js && node --check src/monitor/internal-routes.js && node --check src/monitor/pricing.js && node --check src/monitor/store.js && node --check src/ops/aliyun-bss.js && node --check src/ops/claude-quota.js && node --check src/ops/codex-quota.js && node --check src/ops/dashboard-data.js && node --check src/ops/deepseek-quota.js && node --check src/ops/glm-quota.js && node --check src/ops/internal-routes.js && node --check src/ops/jobs/codex-reset-forecast.js && node --check src/ops/jobs/model-guard.js && node --check src/ops/jobs/quota-probe.js && node --check src/ops/jobs/window-activator.js && node --check src/ops/model-inbox.js && node --check src/ops/notify.js && node --check src/server.js && node --check src/yaml.js && node --check scripts/codex-usage-sync.js && node --check scripts/mac-usage-sync.js && node --check scripts/config-check.js && node --check src/demo.js && node --check test/demo.test.js && node --check scripts/sync-site.js && node --check scripts/check-site.mjs && node --check test/site-sync.test.js && node --check site/data.js && node --check site/activity.js && node --check site/views.js && node --check bin/model-gateway.js && node --check src/paths.js && node --check scripts/pack-check.js && node --check test/cli.test.js && node --check test/paths.test.js && node --check src/collect/index.js && node --check src/collect/service.js && node --check test/collect.test.js && node --check test/collect-service.test.js && node --check src/admin/routes.js && node --check src/admin/config-changes.js && node --check src/admin/json-patch.js && node --check src/admin/errors.js && node --check src/config-file.js && node --check scripts/config-migrate.js && node --check scripts/api.js && node --check test/api-cli.test.js && node --check test/dockerfile.test.js && node --check src/monitor/sources/index.js && node --check src/monitor/sources/claude-code.js && node --check src/monitor/sources/codex.js && node --check test/observed-sources.test.js && node --check src/dashboard/i18n.js && node --check test/dashboard-i18n.test.js",
+    "pack:check": "node scripts/pack-check.js",
+    "config:migrate": "node scripts/config-migrate.js",
+    "codex:sync": "node scripts/codex-usage-sync.js",
+    "usage:sync": "node scripts/mac-usage-sync.js",
+    "site:sync": "node scripts/sync-site.js",
+    "site:check": "node scripts/sync-site.js --check",
+    "site:verify": "node scripts/check-site.mjs",
+    "config:check": "node scripts/config-check.js",
+    "demo": "MODEL_GATEWAY_DEMO=1 MODEL_GATEWAY_CONFIG_DIR=./config/demo node src/server.js",
+    "prepublishOnly": "npm run lint && npm test && npm run pack:check"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

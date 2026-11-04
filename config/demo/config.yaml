@@ -1,0 +1,109 @@
+# Offline demo only. No credentials are required; these references may be unset.
+gateway:
+  host: 127.0.0.1
+  port: 8080
+  keys:
+    - key: env:MODEL_GATEWAY_DEMO_CLAUDE_KEY
+      app: claude-code
+    - key: env:MODEL_GATEWAY_DEMO_CODEX_KEY
+      app: codex-cli
+    - key: env:MODEL_GATEWAY_DEMO_OPENCLAW_KEY
+      app: openclaw
+    - key: env:MODEL_GATEWAY_DEMO_NOTEBOOK_KEY
+      app: notebook
+    - key: env:MODEL_GATEWAY_DEMO_AUTOMATION_KEY
+      app: automation
+
+providers:
+  - id: glm-coding
+    type: glm
+    displayName: GLM Coding
+    badge: Coding Plan · Pro
+    baseUrl: https://open.bigmodel.cn/api/coding/paas/v4/chat/completions
+    apiKeyRef: env:MODEL_GATEWAY_DEMO_GLM_KEY
+    models:
+      - glm-5.3
+  - id: deepseek
+    type: openai
+    displayName: DeepSeek
+    badge: API
+    baseUrl: https://api.deepseek.com/chat/completions
+    apiKeyRef: env:MODEL_GATEWAY_DEMO_DEEPSEEK_KEY
+    models:
+      - deepseek-v4-pro
+      - deepseek-flash
+  - id: openrouter
+    type: openai
+    displayName: OpenRouter
+    badge: API
+    baseUrl: https://openrouter.ai/api/v1/chat/completions
+    apiKeyRef: env:MODEL_GATEWAY_DEMO_OPENROUTER_KEY
+    models:
+      - gpt-6-sol
+      - gpt-6-luna
+    fallbackModelMap:
+      glm-5.3: gpt-6-luna
+  - id: codex
+    type: codex
+    displayName: Codex
+    badge: Pro
+    models:
+      - gpt-6-sol
+      - gpt-6-luna
+
+claude:
+  enabled: true
+  displayName: Claude
+  badge: Max
+  credentialFile: ./config/demo/secrets/claude-credentials.json
+  sessionDir: ./config/demo/sessions
+  models:
+    - claude-sonnet-5-5
+    - claude-haiku-5-5
+
+jobs:
+  probe:
+    enabled: true
+  activate:
+    enabled: true
+    model: glm-5.3
+    codexModel: gpt-6-luna
+    claudeModel: claude-haiku-5-5
+  modelGuard:
+    enabled: true
+    dryRun: true
+
+# Enabled in config so tests exercise demo's runtime suppression of outbound jobs.
+codexResetForecast:
+  enabled: true
+
+topology:
+  appGroups:
+    - id: tools
+      label: AI Tools
+      icon: business
+      apps:
+        - codex-cli
+        - openclaw
+        - notebook
+    - id: automation
+      label: Automation
+      icon: automation
+      apps:
+        - automation
+  collectors:
+    - id: usage-sync
+      label: Usage Sync
+  directConnections:
+    - app: claude-code
+      device: macbook
+      providerId: claude
+      collectorId: usage-sync
+    - app: codex
+      device: linux-box
+      providerId: codex-local
+      collectorId: usage-sync
+    - app: claude-code
+      device: windows-pc
+      providerId: claude
+      collectorId: usage-sync

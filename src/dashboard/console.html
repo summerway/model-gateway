@@ -1,0 +1,1738 @@
+<!doctype html><html lang="zh"><head><meta charset=utf8><link rel="icon" href="/favicon.png"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="stylesheet" href="/dashboard/assets/topology.css"></head><body>
+<title>Model Gateway</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: 顶部一级菜单（概览 · 用量 · 网关 · 日志）+ 二级视角标签；一个视图只回答一个问题。
+   Color: 中性做底 / 单一强调色（交互 + 单色阶数据）/ 状态色只表状态 / 8 槽分类色只给数据系列。 */
+:root {
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#171816; --ink-2:#52514e; --muted:#6f6e68;
+  --hair:rgba(11,11,11,.10); --grid:#e8e7e1; --base:#c3c2b7;
+  --accent:#2467b6; --accent-wash:#eaf2fc; --on-accent:#ffffff;
+  --good:#0ca30c; --good-tx:#006300; --good-wash:#e7f4e9;
+  --warn:#fab219; --warn-tx:#7a4f00; --warn-wash:#fff4dc;
+  --crit:#d03b3b; --crit-tx:#b02a2a; --crit-wash:#fdeeee;
+  --c1:#4477aa; --c2:#ee6677; --c3:#228833; --c4:#ccbb44; --c5:#66ccee; --c6:#aa3377; --c7:#dd8b3a; --c8:#3148a8; --c9:#8a6d0f; --c10:#00876c; --c-other:#a3a199;
+  /* Token 分类安全色（色盲友好，源自老版 /usage 8d4d030）：输入蓝 / 输出绿 / 缓存创建琥珀 / 缓存命中紫 / 成本红 */
+  --tok-in:#2a78d6; --tok-out:#0b950b; --tok-cc:#bd7d00; --tok-cr:#8e7cc3; --tok-cost:#cc3131;
+  --skel-a:#edece7; --skel-b:#dcdbd3;
+  --h0:#eeede8; --h1:#cde2fb; --h2:#9ec5f4; --h3:#5598e7; --h4:#256abf; --h5:#104281;
+  --meter:#2a78d6; --meter-track:#e7e6e0;
+  --tip-bg:#20221f; --tip-fg:#fcfcfb;
+  --shadow:0 1px 2px rgba(11,11,11,.04);
+  --font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page:#101110; --surface:#1b1d1b; --ink:#f3f4ef; --ink-2:#c5c7bc; --muted:#959789;
+  --hair:rgba(255,255,255,.11); --grid:#2b2e2a; --base:#41443e;
+  --accent:#83b8fb; --accent-wash:#1c2d42; --on-accent:#0d1626;
+  --good:#0ca30c; --good-tx:#3fc455; --good-wash:#173020;
+  --warn:#fab219; --warn-tx:#f0c66e; --warn-wash:#382d14;
+  --crit:#d03b3b; --crit-tx:#f07272; --crit-wash:#3c2020;
+  --c1:#6c9bd2; --c2:#f28a97; --c3:#3fae55; --c4:#d9c766; --c5:#7fd6ef; --c6:#c57bb0; --c7:#e5a45c; --c8:#7285e8; --c9:#c9a84c; --c10:#3fbf9d; --c-other:#6c6e66;
+  --tok-in:#3987e5; --tok-out:#3fc455; --tok-cc:#f5b02e; --tok-cr:#b3a1f0; --tok-cost:#f06565;
+  --skel-a:#24261f; --skel-b:#30332a;
+  --h0:#242724; --h1:#123257; --h2:#184f95; --h3:#2a78d6; --h4:#5598e7; --h5:#9ec5f4;
+  --meter:#3987e5; --meter-track:#30332d;
+  --tip-bg:#343831; --tip-fg:#f3f4ef; --shadow:none; color-scheme:dark;
+}}
+:root[data-theme="dark"] {
+  --page:#101110; --surface:#1b1d1b; --ink:#f3f4ef; --ink-2:#c5c7bc; --muted:#959789;
+  --hair:rgba(255,255,255,.11); --grid:#2b2e2a; --base:#41443e;
+  --accent:#83b8fb; --accent-wash:#1c2d42; --on-accent:#0d1626;
+  --good:#0ca30c; --good-tx:#3fc455; --good-wash:#173020;
+  --warn:#fab219; --warn-tx:#f0c66e; --warn-wash:#382d14;
+  --crit:#d03b3b; --crit-tx:#f07272; --crit-wash:#3c2020;
+  --c1:#6c9bd2; --c2:#f28a97; --c3:#3fae55; --c4:#d9c766; --c5:#7fd6ef; --c6:#c57bb0; --c7:#e5a45c; --c8:#7285e8; --c9:#c9a84c; --c10:#3fbf9d; --c-other:#6c6e66;
+  --tok-in:#3987e5; --tok-out:#3fc455; --tok-cc:#f5b02e; --tok-cr:#b3a1f0; --tok-cost:#f06565;
+  --skel-a:#24261f; --skel-b:#30332a;
+  --h0:#242724; --h1:#123257; --h2:#184f95; --h3:#2a78d6; --h4:#5598e7; --h5:#9ec5f4;
+  --meter:#3987e5; --meter-track:#30332d;
+  --tip-bg:#343831; --tip-fg:#f3f4ef; --shadow:none; color-scheme:dark;
+}
+* { box-sizing:border-box; }
+body { background:var(--page); color:var(--ink); font:14px/1.5 var(--font); }
+.shell { max-width:1180px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+main.shell { padding-block:0 48px; }
+a { color:var(--accent); }
+button { font:inherit; color:inherit; }
+:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+
+/* ── 顶栏 ── */
+body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--page); }
+.topbar { position:sticky; top:env(safe-area-inset-top, 0px); z-index:5; background:var(--page); border-bottom:1px solid var(--hair); }
+.topbar-in { display:flex; align-items:center; gap:24px; min-height:56px; }
+.brand { font-weight:650; letter-spacing:.01em; white-space:nowrap; display:flex; align-items:center; gap:8px; color:inherit; text-decoration:none; }
+.brand-mark { width:36px; height:36px; border-radius:9px; flex:none; display:block; object-fit:contain; }
+.nav1 { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; flex:1; min-width:0; }
+.nav1 a { text-decoration:none; color:var(--ink-2); padding:6px 12px; border-radius:8px; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+.nav1 a:hover { background:var(--accent-wash); color:var(--ink); }
+.nav1 a[aria-current="page"] { color:var(--ink); font-weight:600; background:var(--surface); box-shadow:inset 0 0 0 1px var(--hair); }
+.count { font-size:11px; font-weight:650; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:var(--accent); color:var(--on-accent); display:inline-grid; place-items:center; }
+.tools { display:flex; align-items:center; gap:8px; }
+.icon-btn { width:32px; height:32px; display:grid; place-items:center; padding:0; border-radius:8px; border:1px solid var(--hair); background:var(--surface); cursor:pointer; }
+.icon-btn:hover { background:var(--accent-wash); }
+.icon-btn svg { width:16px; height:16px; }
+.proto-tag { font-size:11px; color:var(--muted); border:1px dashed var(--base); border-radius:6px; padding:2px 6px; white-space:nowrap; }
+.mark { position:relative; display:inline-flex; align-items:center; border:0; background:none; padding:0 1px; cursor:help; color:var(--muted); }
+.mark svg { width:13px; height:13px; display:block; }
+.mark .pop { display:none; position:absolute; top:calc(100% + 7px); left:0; z-index:60; width:236px; max-width:calc(100vw - 24px); padding:10px 12px; border-radius:8px; background:var(--surface); border:1px solid var(--hair); box-shadow:0 10px 28px rgba(0,0,0,.16); font-size:12px; line-height:1.65; color:var(--ink-2); text-align:left; font-weight:400; white-space:normal; pointer-events:none; }
+.mark:hover .pop, .mark:focus-visible .pop { display:block; }
+.mark .pop b.tt { display:block; margin-bottom:3px; color:var(--ink); font-weight:650; }
+.probe-btn { border:1px solid var(--hair); background:var(--surface); color:var(--ink-2); border-radius:6px; font-size:11px; padding:2px 8px; cursor:pointer; }
+.probe-btn:hover { border-color:var(--accent); color:var(--accent); }
+.probe-btn:disabled { opacity:.55; cursor:default; }
+.icon-btn.is-loading svg { animation:c-spin .9s linear infinite; }
+.icon-btn.is-success { border-color:var(--good-tx); color:var(--good-tx); }
+.icon-btn.is-success .fb-check { stroke-dasharray:1; stroke-dashoffset:0; animation:c-check .3s cubic-bezier(.16,1,.3,1); }
+.icon-btn.is-error { border-color:var(--crit-tx); color:var(--crit-tx); }
+.icon-btn:disabled { opacity:.7; cursor:default; }
+@keyframes c-spin { to { transform:rotate(360deg); } }
+@keyframes c-check { from { stroke-dashoffset:1; } to { stroke-dashoffset:0; } }
+.auto-btn { font-size:12px; border:1px solid var(--hair); border-radius:999px; padding:4px 10px; background:var(--surface); color:var(--ink-2); cursor:pointer; white-space:nowrap; }
+.auto-btn.on { color:var(--ink); }
+.auto-btn.on::before { content:"●"; font-size:8px; color:var(--good-tx); margin-right:5px; vertical-align:1px; }
+.u-filters { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.u-filters label { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); font-weight:600; }
+.u-filters select { font-weight:600; }
+.u-filters select hr { border:none; border-top:1px dashed var(--hair); margin:4px 6px; } /* 来源分组分割线：淡虚线 */
+.u-hero-grid { display:grid; grid-template-columns:minmax(170px,1.25fr) minmax(130px,1fr) minmax(300px,2fr); align-items:center; }
+.u-primary { display:grid; gap:4px; padding-right:22px; min-width:0; }
+.u-primary + .u-primary { border-left:1px solid var(--hair); padding-left:22px; }
+.u-xl { font-size:clamp(24px, 2.3vw, 30px); font-weight:700; letter-spacing:-.02em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.u-primary.cost .u-xl { color:var(--tok-cost); }
+.u-mini-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px 26px; border-left:1px solid var(--hair); padding-left:22px; }
+.u-mini { display:grid; gap:3px; min-width:0; }
+.u-mid { font-size:16px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.u-mini.ok .u-mid { color:var(--good-tx); }
+.u-mini.warn .u-mid { color:var(--warn-tx); }
+@media (max-width: 1000px) {
+  .u-hero-grid { grid-template-columns:1fr 1fr; }
+  .u-mini-grid { grid-column:1 / -1; border-left:0; padding-left:0; border-top:1px solid var(--hair); margin-top:12px; padding-top:12px; grid-template-columns:repeat(4, minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  .u-hero-grid { grid-template-columns:1fr; }
+  .u-primary + .u-primary { border-left:0; padding-left:0; border-top:1px solid var(--hair); padding-top:12px; }
+  .u-mini-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+}
+.u-label { font-size:12px; color:var(--muted); }
+.u-label .mark { vertical-align:middle; }
+.u-tile .u-big { font-size:clamp(18px, 1.8vw, 23px); font-weight:680; letter-spacing:-.015em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.u-tile.cost .u-big { color:var(--tok-cost); }
+.u-tile.ok .u-big { color:var(--good-tx); }
+.u-tile.warn .u-big { color:var(--warn-tx); }
+.u-sub { font-size:12px; color:var(--muted); }
+.u-mix { margin-top:14px; padding-top:12px; border-top:1px dashed var(--hair); }
+.chart-wrap svg { display:block; width:100%; height:auto; }
+.u-legend { display:flex; gap:6px 14px; flex-wrap:wrap; margin-bottom:8px; }
+.u-legend button { display:inline-flex; align-items:center; gap:5px; font:inherit; font-size:12px; border:none; background:none; color:var(--ink-2); cursor:pointer; padding:2px 6px; border-radius:6px; }
+.u-legend button:hover { background:var(--accent-wash); }
+.u-legend button.off { opacity:.42; }
+.u-legend button:disabled { cursor:default; opacity:.3; }
+.u-legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+.u-legend em { font-style:normal; }
+.u-legend b { font-weight:600; font-variant-numeric:tabular-nums; color:var(--muted); }
+.u-legend svg { vertical-align:middle; }
+.u-src-row { display:flex; gap:8px 14px; flex-wrap:wrap; align-items:center; }
+.u-src-row + .u-src-row { margin-top:4px; }
+.u-grp { font-size:11px; color:var(--muted); border:1px solid var(--hair); border-radius:999px; padding:1px 8px; flex:none; min-width:56px; display:inline-flex; justify-content:center; }
+
+/* ── 二级标签 ── */
+.headbar { display:flex; justify-content:flex-end; align-items:center; padding-top:18px; }
+.tabs-row { display:flex; align-items:flex-end; gap:12px; margin-top:16px; border-bottom:1px solid var(--hair); overflow-x:auto; scrollbar-width:none; }
+.tabs-row .tabs2 { margin-top:0; border-bottom:0; flex:1; min-width:0; }
+.tabs-row .seg { margin-bottom:7px; flex:none; }
+.tabs2 { display:flex; gap:2px; border-bottom:1px solid var(--hair); margin-top:16px; overflow-x:auto; scrollbar-width:none; position:relative; }
+.tabs2 a { text-decoration:none; color:var(--ink-2); padding:8px 12px 10px; margin-bottom:-1px; white-space:nowrap; display:flex; gap:6px; align-items:center; position:relative; z-index:1; }
+.tabs2 a:hover { color:var(--ink); }
+.tabs2 a[aria-current="page"] { color:var(--ink); font-weight:600; }
+
+/* ── 控件 ── */
+.seg { display:inline-flex; background:var(--meter-track); border-radius:8px; padding:2px; gap:2px; position:relative; }
+.seg button { border:0; background:transparent; padding:4px 10px; border-radius:6px; cursor:pointer; color:var(--ink-2); font-size:13px; white-space:nowrap; position:relative; z-index:1; }
+.seg button[aria-pressed="true"] { color:var(--ink); font-weight:600; }
+.sl-pill { position:absolute; left:0; top:0; bottom:0; z-index:0; pointer-events:none; border-radius:8px; transition:transform .3s cubic-bezier(.3,.7,.3,1), width .3s cubic-bezier(.3,.7,.3,1); }
+.tabs2 > .sl-pill { background:var(--accent); top:auto; bottom:0; height:2px; border-radius:2px; }
+.seg > .sl-pill { background:var(--surface); box-shadow:0 1px 2px rgba(0,0,0,.12); border-radius:6px; top:2px; bottom:2px; }
+.controls { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.controls select { margin-left:auto; }
+select { font:inherit; min-height:28px; max-width:100%; border:1px solid var(--hair); border-radius:6px; padding:4px 8px; background:var(--surface); color:var(--ink); font-size:12px; line-height:1.2; transition:border-color .15s ease,box-shadow .15s ease; }
+select:hover,select:open { border-color:color-mix(in srgb,var(--accent) 55%,var(--hair)); }
+select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@supports(appearance:base-select) {
+  select,select::picker(select) { appearance:base-select; }
+  select { gap:8px; display:inline-flex; align-items:center; }
+  select::picker-icon { width:12px; color:var(--muted); transition:rotate .18s ease; }
+  select:open::picker-icon { rotate:180deg; }
+  select::picker(select) { padding:4px; margin-top:5px; border:1px solid var(--hair); border-radius:8px; background:var(--surface); color:var(--ink); box-shadow:0 6px 18px #0002; max-width:calc(100vw - 24px); max-height:min(360px,60vh); overflow:auto; opacity:0; transform:translateY(-3px); transition:opacity .15s ease,transform .15s ease,display .15s allow-discrete,overlay .15s allow-discrete; }
+  select:open::picker(select) { opacity:1; transform:translateY(0); }
+  @starting-style { select:open::picker(select) { opacity:0; transform:translateY(-3px); } }
+  select option { border-radius:5px; min-height:30px; padding:6px 9px; font-size:12px; overflow-wrap:anywhere; white-space:normal; cursor:pointer; }
+  select option:hover,select option:focus { background:color-mix(in srgb,var(--accent) 9%,var(--surface)); outline:none; }
+  select option:checked { color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,var(--surface)); font-weight:600; }
+  select option::checkmark { color:var(--accent); order:1; margin-left:auto; }
+}
+.ctl-label { font-size:12px; color:var(--muted); margin-right:6px; }
+
+/* ── 卡片与网格 ── */
+.view { display:grid; gap:16px; margin-top:20px; }
+.card { background:var(--surface); border:1px solid var(--hair); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow); min-width:0; }
+.card-h { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.card-h h2 { margin:0; font-size:15px; font-weight:650; }
+.card-h .meta { color:var(--muted); font-size:12px; }
+.grid-2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap:16px; }
+.grid-4 { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap:16px; }
+.grid-3 { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap:16px; }
+.tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap:1px; background:var(--hair); border:1px solid var(--hair); border-radius:12px; overflow:hidden; }
+.tile { background:var(--surface); padding:14px 16px; min-width:0; }
+.tile .k { font-size:12px; color:var(--muted); }
+.tile .v { font-size:22px; font-weight:650; margin-top:2px; white-space:nowrap; }
+.tile-sub { font-size:12px; color:var(--muted); font-weight:500; }
+.tile .s { font-size:12px; color:var(--ink-2); margin-top:2px; }
+.num { font-variant-numeric:tabular-nums; }
+
+/* ── 状态 ── */
+.chip { display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:550; padding:1px 8px; border-radius:999px; white-space:nowrap; background:var(--meter-track); color:var(--ink-2); }
+.chip svg { width:12px; height:12px; }
+.chip.good { background:var(--good-wash); color:var(--good-tx); }
+.chip.warn { background:var(--warn-wash); color:var(--warn-tx); }
+.chip.crit { background:var(--crit-wash); color:var(--crit-tx); }
+.chip.info { background:var(--accent-wash); color:var(--accent); }
+.chip.ghost { background:transparent; box-shadow:inset 0 0 0 1px var(--hair); }
+.alerts { display:grid; gap:8px; }
+
+.alert { display:flex; gap:10px; align-items:flex-start; padding:10px 14px; border-radius:10px; border:1px solid var(--hair); background:var(--surface); }
+.alert svg { width:16px; height:16px; flex:none; margin-top:2px; }
+.alert.crit { background:var(--crit-wash); border-color:transparent; } .alert.crit svg { color:var(--crit); }
+.alert.warn { background:var(--warn-wash); border-color:transparent; } .alert.warn svg { color:var(--warn-tx); }
+.alert.info svg { color:var(--accent); }
+.alert b { font-weight:600; }
+.alert .act { margin-left:auto; white-space:nowrap; }
+.alink { display:inline-flex; align-items:center; gap:3px; padding:3px 11px; border-radius:999px; background:var(--accent-wash); color:var(--accent); font-size:12.5px; font-weight:600; text-decoration:none; white-space:nowrap; transition:background .15s ease, color .15s ease; }
+.alink:hover { background:var(--accent); color:var(--on-accent); }
+
+/* ── 额度卡 ── */
+.quota { display:grid; gap:12px; grid-template-rows:auto 1fr auto; align-content:stretch; }
+.q-body { min-height:112px; display:grid; gap:12px; align-content:start; }
+.q-body > .meter:only-child { height:100%; display:flex; flex-direction:column; justify-content:space-between; }
+.q-body > .meter:only-child .meter-row .pct { font-size:18px; }
+.q-head { display:flex; align-items:center; gap:11px; }
+.q-head .prov-logo { width:32px; height:32px; border-radius:9px; }
+.q-head .mark { vertical-align:1px; }
+.q-head .mark svg { width:15px; height:15px; }
+/* 状态 chip 与渠道名称行同高（顶部对齐名称行，不随两行文本块居中） */
+.q-head .chip { margin-left:auto; align-self:flex-start; margin-top:1px; }
+.mono-badge { width:28px; height:28px; border-radius:7px; display:grid; place-items:center; font-weight:700; font-size:12px; color:var(--surface); background:var(--ink); flex:none; }
+.q-name { font-weight:600; }
+.q-plan { font-size:12px; color:var(--muted); }
+.q-head .chip { margin-left:auto; }
+.meter { display:grid; gap:4px; }
+.meter-row { display:flex; justify-content:space-between; font-size:13px; gap:8px; }
+.meter-row .pct { font-weight:600; }
+.meter-track { height:8px; background:var(--meter-track); border-radius:4px; overflow:hidden; }
+.meter-fill { height:100%; width:100%; border-radius:4px; background:var(--meter); transform-origin:left center; transform:scaleX(0); transition:transform .9s cubic-bezier(.22,.9,.24,1), background-color .3s; }
+.meter-fill.warn { background:var(--warn); } .meter-fill.crit { background:var(--crit); }
+.meter-foot { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:8px; }
+.meter-foot .lvl { font-weight:600; }
+.meter-foot .lvl.warn { color:var(--warn-tx); } .meter-foot .lvl.crit { color:var(--crit-tx); }
+.balance { font-size:28px; font-weight:650; }
+.balance.crit { color:var(--crit-tx); }
+.q-foot { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--muted); border-top:1px solid var(--hair); padding-top:10px; }
+.q-foot .icon-btn { width:24px; height:24px; border-radius:7px; } /* 刷新按钮与「查看用量」同高，随更新时间放左下角 */
+.q-foot .icon-btn svg { width:13px; height:13px; }
+.health { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:16px; }
+@media (max-width:1000px) { .health { grid-template-columns:repeat(3, minmax(0,1fr)); } } /* 5 项 → 3+2 收尾，不再孤格 */
+@media (max-width:560px) { .health { grid-template-columns:1fr 1fr; } .health > div:last-child:nth-child(odd) { grid-column:1 / -1; } } /* 手机 2+2+末格通栏 */
+
+/* ── 表格 ── */
+.tbl-wrap { overflow-x:auto; margin:0 -4px; }
+table.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { text-align:left; font-weight:550; color:var(--muted); font-size:12px; padding:6px 8px; border-bottom:1px solid var(--hair); white-space:nowrap; }
+.tbl td { padding:9px 8px; border-bottom:1px solid var(--hair); vertical-align:middle; }
+.tbl tr:last-child td { border-bottom:0; }
+.tbl .r { text-align:right; } .tbl .num { white-space:nowrap; }
+.tbl tbody tr.row { cursor:pointer; }
+.tbl tbody tr.row:hover td { background:var(--accent-wash); }
+.tbl tr.detail td { background:var(--page); padding:14px 16px; }
+.dot { width:10px; height:10px; border-radius:3px; display:inline-block; flex:none; }
+.name { display:flex; align-items:center; gap:8px; min-width:0; }
+.name span.t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.caret { width:14px; height:14px; color:var(--muted); transition:transform .2s; flex:none; }
+tr.open .caret { transform:rotate(90deg); }
+.share { display:flex; align-items:center; gap:8px; min-width:140px; }
+.share-track { flex:1; height:8px; border-radius:4px; background:var(--meter-track); overflow:hidden; }
+.share-fill { height:100%; background:var(--meter); border-radius:4px; transform-origin:left; animation:grow .7s cubic-bezier(.22,.9,.24,1) both; }
+.share .p { width:46px; text-align:right; color:var(--ink-2); font-size:12px; }
+.sharerow { display:grid; grid-template-columns:130px 1fr 60px 46px; gap:10px; align-items:center; font-size:13px; }
+.sharerow .sr-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sharerow .share-track { height:6px; width:100%; max-width:260px; justify-self:end; border-radius:3px; }
+.sharerow .num { color:var(--ink-2); text-align:right; white-space:nowrap; }
+.sharerow .p { text-align:right; font-weight:600; color:var(--ink); font-size:12.5px; }
+@media (max-width:640px) { /* 占比行换行式：名称与数值同行，进度条通栏另起一行（参考移动端截图） */
+  .mini-list { gap:11px; }
+  .sharerow { grid-template-columns:minmax(0,1fr) auto auto; grid-template-areas:"name num pct" "track track track"; gap:4px 8px; }
+  .sharerow .sr-name { grid-area:name; font-weight:550; }
+  .sharerow .num { grid-area:num; }
+  .sharerow .p { grid-area:pct; }
+  .sharerow .share-track { grid-area:track; max-width:none; justify-self:stretch; }
+}
+@keyframes grow { from { transform:scaleX(0); } }
+.mix { display:flex; height:10px; border-radius:5px; overflow:hidden; gap:2px; background:var(--surface); }
+.mix span { display:block; height:100%; transform-origin:left; animation:grow .7s cubic-bezier(.22,.9,.24,1) both; }
+/* 骨架屏光柱：加载占位扫光（同老版 data-loading-placeholder） */
+.skel { border-radius:6px; user-select:none; cursor:progress; background:linear-gradient(100deg,var(--skel-a) 30%,var(--skel-b) 50%,var(--skel-a) 70%); background-size:180% 100%; animation:skel-sweep 1.2s linear infinite; }
+@keyframes skel-sweep { from { background-position:180% 0; } to { background-position:-180% 0; } }
+.legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); }
+.legend .it { display:inline-flex; align-items:center; gap:6px; }
+.legend button.it { border:0; background:none; padding:2px 0; cursor:pointer; }
+.legend button.it[aria-pressed="false"] { opacity:.4; }
+.detail-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap:18px; }
+.detail-grid .full { grid-column:1/-1; }
+.detail-grid .dsplit { grid-column:1/-1; display:grid; grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); gap:20px; align-items:start; }
+.detail-grid .dsplit .dcol { display:grid; gap:16px; min-width:0; }
+@media (max-width:860px) { .detail-grid .dsplit { grid-template-columns:1fr; } }
+.detail-grid h3 { margin:0 0 8px; font-size:12px; color:var(--muted); font-weight:550; }
+.mini-list { display:grid; gap:6px; font-size:13px; }
+.mini-list .li { display:grid; grid-template-columns:minmax(0,200px) auto; gap:10px; align-items:center; }
+.mini-list .li .name { display:flex; align-items:center; gap:6px; min-width:0; }
+.mini-list .li .name .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* ── 图表 ── */
+.chart { position:relative; width:100%; }
+.chart svg { display:block; width:100%; height:auto; overflow:visible; }
+.ax { fill:var(--muted); font-size:11px; font-family:var(--font); }
+.gl { stroke:var(--grid); stroke-width:1; }
+.bl { stroke:var(--base); stroke-width:1; }
+.tip { position:absolute; pointer-events:none; background:var(--tip-bg); color:var(--tip-fg); border-radius:8px; padding:8px 10px; font-size:12px; line-height:1.55; min-width:150px; max-width:280px; box-shadow:0 6px 18px rgba(0,0,0,.22); z-index:3; opacity:0; transition:opacity .12s; }
+.tip.on { opacity:1; }
+.tip .tr { display:flex; justify-content:space-between; gap:14px; }
+.tip .tt { font-weight:600; margin-bottom:2px; }
+.chart-sub { font-size:12px; color:var(--muted); margin:14px 0 4px; }
+
+/* ── 热力图 ── */
+.heat-scroll { overflow-x:auto; scrollbar-width:thin; }
+.heat .cell { transform-box:fill-box; transform-origin:center; animation:cell-in .5s cubic-bezier(.22,.9,.24,1) both; }
+.heat .cell:hover { stroke:var(--ink); stroke-width:1.5; }
+@keyframes cell-in { from { opacity:0; transform:scale(.4); } }
+.h0{fill:var(--h0)} .h1{fill:var(--h1)} .h2{fill:var(--h2)} .h3{fill:var(--h3)} .h4{fill:var(--h4)} .h5{fill:var(--h5)}
+
+/* ── 渠道与模型 ── */
+.chain { display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
+.chain .hop { font-size:12px; padding:2px 8px; border-radius:6px; box-shadow:inset 0 0 0 1px var(--hair); white-space:nowrap; }
+.chain .hop.first { background:var(--accent-wash); box-shadow:none; color:var(--ink); font-weight:550; }
+.chain .arr { color:var(--muted); font-size:12px; }
+.prov-strip { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap:10px; }
+.prov { display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid var(--hair); border-radius:10px; background:var(--surface); cursor:pointer; font:inherit; color:inherit; text-align:left; }
+.prov:hover { border-color:var(--accent); }
+.prov[aria-pressed="true"] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:var(--accent-wash); }
+.prov .s { font-size:12px; color:var(--muted); }
+.prov .n { margin-left:auto; font-size:12px; color:var(--muted); white-space:nowrap; }
+
+/* ── 品牌与 Agent 图标 ── */
+.prov-logo { width:28px; height:28px; border-radius:7px; flex:none; object-fit:contain; display:block; }
+.prov-logo.sm { width:22px; height:22px; border-radius:6px; }
+.prov-logo.invert-d { filter:none; }
+/* 暗色反色：HTML img（渠道卡 .prov-logo）用 CSS invert 函数；拓扑内 SVG <image>
+   不能用 CSS filter 函数（WebKit 不支持对 SVG 元素套，iOS Chrome/Safari 全无效），
+   改引用 SVG 原生 feColorMatrix 滤镜 url(#tp-invert)（defs 在 topology svg 内，
+   引用式 filter:url(#…) 在 WebKit/Chromium 均支持）。 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prov-logo.invert-d { filter:invert(1); }
+  :root:not([data-theme="light"]) .tp-glyph-img.invert-d { filter:url(#tp-invert); }
+}
+:root.dark .prov-logo.invert-d, :root[data-theme="dark"] .prov-logo.invert-d { filter:invert(1); }
+:root.dark .tp-glyph-img.invert-d, :root[data-theme="dark"] .tp-glyph-img.invert-d { filter:url(#tp-invert); }
+.agent-ico { width:18px; height:18px; flex:none; }
+tr.row.hl td { background:var(--accent-wash); }
+.tbl tr.grp td { padding:10px 12px 4px; font-size:12px; font-weight:650; color:var(--muted); letter-spacing:.02em; }
+
+/* ── 建议 ── */
+.sugg { display:grid; gap:14px; }
+.sugg-h { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.sugg-h .when { margin-left:auto; font-size:12px; color:var(--muted); }
+.cmp td:first-child { color:var(--muted); width:150px; white-space:nowrap; }
+.delta-up { color:var(--crit-tx); } .delta-down { color:var(--good-tx); }
+.actions { display:flex; gap:8px; flex-wrap:wrap; }
+.btn { border:1px solid var(--hair); background:var(--surface); padding:6px 14px; border-radius:8px; cursor:pointer; font-size:13px; }
+.btn:hover { background:var(--accent-wash); }
+.btn.primary { background:var(--accent); color:var(--on-accent); border-color:transparent; font-weight:600; }
+.btn.primary:hover { filter:brightness(1.08); }
+.btn.danger { color:var(--crit-tx); }
+.modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.35); display:grid; place-items:center; z-index:20; padding:16px; }
+.modal { background:var(--surface); border-radius:14px; border:1px solid var(--hair); width:min(560px, 100%); padding:20px; display:grid; gap:14px; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+.modal h3 { margin:0; font-size:16px; }
+.diff { font-family:var(--mono); font-size:12.5px; border:1px solid var(--hair); border-radius:8px; overflow:hidden; }
+.diff div { padding:3px 10px; white-space:pre; }
+.diff .add { background:var(--good-wash); color:var(--good-tx); } .diff .del { background:var(--crit-wash); color:var(--crit-tx); }
+
+/* ── 评审备注 ── */
+.note { border:1px dashed var(--base); border-radius:10px; padding:10px 14px; font-size:13px; color:var(--ink-2); background:transparent; }
+.note summary { cursor:pointer; color:var(--muted); font-size:12px; }
+.note ul { margin:8px 0 0; padding-left:18px; display:grid; gap:4px; }
+.muted { color:var(--muted); }
+.empty { color:var(--muted); padding:24px 0; text-align:center; }
+
+@media (max-width:640px) {
+  .topbar-in { gap:12px; } .proto-tag { display:none; }
+  .page-title { font-size:19px; }
+  .tile .v { font-size:19px; }
+  .tile:last-child:nth-child(odd) { grid-column:1/-1; }
+  .brand-name { display:none; }
+  .card { padding:14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .meter-fill, .share-fill, .mix span, .skel, .heat .cell, .caret { transition:none !important; animation:none !important; }
+}
+</style>
+
+<header class="topbar">
+  <div class="shell topbar-in">
+    <a class="brand" href="#overview" aria-label=""><img class="brand-mark" src="/dashboard/assets/topology/gateway.png" alt="" width="36" height="36"><span class="brand-name">model-gateway</span></a>
+    <nav class="nav1" id="nav1" aria-label=""></nav>
+    <div class="tools">
+      <button class="auto-btn on" id="auto-btn" type="button" aria-pressed="true" title=""></button>
+      <span class="proto-tag" id="live-tag" title=""></span>
+      <button class="auto-btn" id="language" type="button"></button>
+      <button class="icon-btn" id="theme" type="button" aria-label=""><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/></svg></button>
+    </div>
+  </div>
+</header>
+<main class="shell" id="main"></main>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="/dashboard/assets/topology.js"></script>
+<script src="/dashboard/assets/i18n.js"></script>
+<script>
+'use strict';
+// Standalone script consumers (including existing UI tests) retain Chinese defaults.
+const MGI18n = globalThis.MGI18n ?? {
+  lang: 'zh',
+  t: (s, vars = {}) => s.replace(/\{(\w+)\}/g, (match, key) => Object.hasOwn(vars, key) ? String(vars[key]) : match),
+};
+const { t } = MGI18n;
+const labelUpdates = [];
+let S = null;
+let INBOX = { csrf: '', providers: {} };
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const store = { get(k, d) { try { const v = localStorage.getItem('mgp:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem('mgp:' + k, JSON.stringify(v)); } catch {} } };
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* ── 按视图布局的骨架屏：数据未到时各视图渲染自身形状的加载占位（替代全局光条）── */
+let BOOT_ERR = '';
+let R_ENTERING = true; // 是否为切视图首次渲染（概览额度条/今日网关数字从 0 起始动画的开关）
+const skBar = (w, h = 12) => `<div class="skel" style="width:${w};height:${h}px"></div>`;
+const skRows = (n = 6) => Array.from({ length: n }, (_, i) => `<div style="display:flex;gap:14px;align-items:center">${skBar(`${88 - ((i * 37) % 46)}%`, 12)}</div>`).join('');
+const skCard = (title, inner, gap = 12) => `<section class="card"><div class="card-h"><h2>${title}</h2></div><div style="display:grid;gap:${gap}px">${inner}</div></section>`;
+const skChartCard = (h = 240) => `<section class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="skel" style="width:96px;height:16px"></div><div class="skel" style="width:150px;height:16px"></div></div><div class="skel" style="height:${h}px;border-radius:8px;margin-top:12px"></div></section>`;
+const skTableCard = (title, n = 8) => skCard(title, skBar('34%', 13) + skRows(n));
+const skTile = () => `<div class="tile"><div class="skel" style="width:46%;height:11px"></div><div class="skel" style="width:68%;height:22px;margin-top:7px"></div></div>`;
+const skUTile = () => `<div class="u-mini"><div class="skel" style="width:56%;height:11px"></div><div class="skel" style="width:74%;height:16px"></div></div>`;
+const skUPrimary = () => `<div class="u-primary"><div class="skel" style="width:52%;height:11px"></div><div class="skel" style="width:78%;height:28px"></div><div class="skel" style="width:44%;height:10px"></div></div>`;
+const skQuotaCard = () => `<article class="card quota"><div class="q-head"><div class="skel" style="width:32px;height:32px;border-radius:9px"></div><div style="flex:1;display:grid;gap:5px">${skBar('42%', 13)}${skBar('26%', 10)}</div><div class="skel" style="width:44px;height:18px;border-radius:999px"></div></div><div class="q-body"><div style="display:grid;gap:6px">${skBar('36%', 10)}<div class="skel" style="height:8px;border-radius:4px"></div>${skBar('58%', 10)}</div><div style="display:grid;gap:6px">${skBar('36%', 10)}<div class="skel" style="height:8px;border-radius:4px"></div>${skBar('58%', 10)}</div></div></article>`;
+
+/* ── 格式 ── */
+const fmtTok = (n) => { if (MGI18n.lang === 'en') return MGI18n.fmtCompact(n); return n >= 1e8 ? (n / 1e8).toFixed(n >= 1e9 ? 1 : 2) + ' 亿' : n >= 1e4 ? (n / 1e4).toFixed(n >= 1e6 ? 0 : 1) + ' 万' : Math.round(n).toLocaleString('en-US'); };
+const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
+const fmtUsd = (n) => n == null ? '—' : '$' + (n >= 100 ? n.toFixed(0) : n >= 1 ? n.toFixed(2) : n.toFixed(3));
+const fmtPct = (n) => (n * 100).toFixed(n >= 0.1 || n === 0 ? 0 : 1) + '%';
+const pad = (n) => String(n).padStart(2, '0');
+const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseDay = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseDay(s); d.setDate(d.getDate() + n); return dayKey(d); };
+const shortDay = (s) => MGI18n.fmtDate(parseDay(s));
+/* ── 数字滚动：data-roll 元素从 data-from → data-to 缓动滚动；data-fmt 决定格式。
+   rollPrev 跨 render 记住每个指标上次值，仅变化时滚动。── */
+const rollPrev = new Map();
+  const ROLL_FMT = { int: fmtInt, tok: fmtTok, usd: fmtUsd, usd2: (n) => '$' + n.toFixed(2), pct1: (n) => n.toFixed(1) + '%' };
+const rollAttr = (key, to, fmt, from0 = false) => { const from = from0 ? 0 : (rollPrev.has(key) ? rollPrev.get(key) : to); rollPrev.set(key, to); return from !== to && Number.isFinite(to) ? ` data-roll="${key}" data-from="${from}" data-to="${to}" data-fmt="${fmt}"` : ''; };
+function animateRolls() {
+  if (reduced) return;
+  for (const el of document.querySelectorAll('[data-roll]')) {
+    const to = Number(el.dataset.to), from = Number(el.dataset.from);
+    const fmt = ROLL_FMT[el.dataset.fmt] ?? fmtInt;
+    const t0 = performance.now(), dur = 800;
+    const step = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(from + (to - from) * e);
+      if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+}
+let NOW = new Date();
+let TODAY = dayKey(NOW);
+function relTime(iso) {
+  const m = Math.max(0, Math.floor((NOW - new Date(iso)) / 60000));
+  if (m < 1) return t('刚刚'); if (m < 60) return t('{n} 分钟前', { n: m });
+  const h = Math.floor(m / 60); if (h < 48) return t('{n} 小时前', { n: h });
+  return t('{n} 天前', { n: Math.floor(h / 24) });
+}
+function untilTime(iso) {
+  const m = Math.max(0, Math.round((new Date(iso) - NOW) / 60000));
+  if (m < 60) return t('{n} 分钟后重置', { n: m });
+  const h = Math.floor(m / 60); if (h < 48) return t('{v1} 小时 {v2} 分后重置', { v1: h, v2: m % 60 });
+  return t('{v1} 天 {v2} 小时后重置', { v1: Math.floor(h / 24), v2: h % 24 });
+}
+const clock = (iso) => { const d = new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+
+/* ── 图标 ── */
+const SVG_RF = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 1.5v3h-3"/></svg>';
+const FB_ICON = {
+  success: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path class="fb-check" pathLength="1" d="m3 8 3.2 3.2L13 4.5"/></svg>',
+  error: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7"/></svg>',
+};
+const I = {
+  warn: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2 1.5 13.5h13Z" stroke-linejoin="round"/><path d="M8 6.5v3.2M8 11.6v.1"/></svg>',
+  crit: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.8v3.8M8 10.9v.1"/></svg>',
+  ok: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3.5 8.3 2.8 2.8 6-6.2"/></svg>',
+  info: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v4M8 4.9v.1"/></svg>',
+  caret: '<svg class="caret" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m6 3.5 4.5 4.5L6 12.5"/></svg>',
+};
+
+/* ── 品牌图标（与线上 dashboard 同源：智谱/DeepSeek/OpenAI/Claude/百炼官方 mark） ── */
+const PICON = {"zhipu": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnhsaW5rPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5L3hsaW5rIiB2ZXJzaW9uPSIxLjEiIHg9IjBweCIgeT0iMHB4IiBzdHlsZT0iZW5hYmxlLWJhY2tncm91bmQ6bmV3IDAgMCAzMCAzMDsiIHhtbDpzcGFjZT0icHJlc2VydmUiIHZpZXdCb3g9IjEuMTcgMS4xNyAyNy42NiAyNy42NSI+CjxzdHlsZSB0eXBlPSJ0ZXh0L2NzcyI+Cgkuc3Qwe29wYWNpdHk6MC4zO2ZpbGw6I0UyRTRFNzt9Cgkuc3Qxe29wYWNpdHk6MC44O2ZpbGw6I0UyRTRFNztzdHJva2U6I0ZGRkZGRjtzdHJva2Utd2lkdGg6NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3Qye2ZpbGw6dXJsKCNTVkdJRF8xXyk7fQoJLnN0M3tmaWxsOm5vbmU7c3Ryb2tlOiNFMEU0RTk7c3Ryb2tlLXdpZHRoOjAuMjU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0NHtmaWxsOm5vbmU7fQoJLnN0NXtmaWxsOiM5REExQTU7fQoJLnN0NntmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOm5vbmU7fQoJLnN0N3tmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiNERkUyRTc7fQoJLnN0OHtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiNDREQ0REE7fQoJLnN0OXtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOiNCM0JDQzc7fQoJLnN0MTB7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojOURBQUI3O30KCS5zdDExe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6Izg2OThBODt9Cgkuc3QxMntmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfMl8pO30KCS5zdDEze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8zXyk7fQoJLnN0MTR7ZmlsbDojMUY2M0VDO30KCS5zdDE1e2ZpbGw6IzJEMkQyRDt9Cgkuc3QxNntmaWxsOm5vbmU7c3Ryb2tlOiNFMEU0RTk7c3Ryb2tlLXdpZHRoOjAuNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxN3tmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfNF8pO30KCS5zdDE4e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81Xyk7fQoJLnN0MTl7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MjB7ZmlsbDpub25lO3N0cm9rZTp1cmwoI1NWR0lEXzZfKTtzdHJva2Utd2lkdGg6MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QyMXtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfN18pO30KCS5zdDIye2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF84Xyk7fQoJLnN0MjN7ZmlsbDojRkZGRkZGO30KCS5zdDI0e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6IzJEMkQyRDt9Cgkuc3QyNXtjbGlwLXBhdGg6dXJsKCNTVkdJRF8xMF8pO30KCS5zdDI2e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzEyXyk7fQoJLnN0Mjd7ZmlsbDp1cmwoI1NWR0lEXzEzXyk7fQoJLnN0Mjh7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzE0Xyk7fQoJLnN0Mjl7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzE1Xyk7fQoJLnN0MzB7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTdfKTt9Cgkuc3QzMXtjbGlwLXBhdGg6dXJsKCNTVkdJRF8xOV8pO30KCS5zdDMye2ZpbGw6dXJsKCNTVkdJRF8yMF8pO30KCS5zdDMze2ZpbGw6bm9uZTtzdHJva2U6dXJsKCNTVkdJRF8yMV8pO3N0cm9rZS13aWR0aDoyO3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDM0e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8yMl8pO30KCS5zdDM1e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8yM18pO30KCS5zdDM2e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzI1Xyk7fQoJLnN0Mzd7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMjdfKTt9Cgkuc3QzOHtmaWxsOnVybCgjU1ZHSURfMjhfKTt9Cgkuc3QzOXtjbGlwLXBhdGg6dXJsKCNTVkdJRF8zMF8pO30KCS5zdDQwe2NsaXAtcGF0aDp1cmwoI1NWR0lEXzMyXyk7fQoJLnN0NDF7ZmlsbDp1cmwoI1NWR0lEXzMzXyk7fQoJLnN0NDJ7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMTI2RUY2O30KCS5zdDQze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6I0ZGRkZGRjt9Cgkuc3Q0NHtjbGlwLXBhdGg6dXJsKCNTVkdJRF8zNV8pO30KCS5zdDQ1e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzM3Xyk7fQoJLnN0NDZ7ZmlsbDp1cmwoI1NWR0lEXzM4Xyk7fQoJLnN0NDd7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojOURBMUE1O30KCS5zdDQ4e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF8zOV8pO30KCS5zdDQ5e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80MF8pO30KCS5zdDUwe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80MV8pO30KCS5zdDUxe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80Ml8pO30KCS5zdDUye2ZpbGw6bm9uZTtzdHJva2U6dXJsKCNTVkdJRF80M18pO3N0cm9rZS13aWR0aDoyO3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDUze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6bm9uZTtzdHJva2U6I0UwRTRFOTtzdHJva2Utd2lkdGg6MC41O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDU0e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80NF8pO30KCS5zdDU1e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80NV8pO30KCS5zdDU2e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80Nl8pO30KCS5zdDU3e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80N18pO30KCS5zdDU4e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80OF8pO30KCS5zdDU5e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF80OV8pO30KCS5zdDYwe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81MF8pO30KCS5zdDYxe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81MV8pO30KCS5zdDYye2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81Ml8pO30KCS5zdDYze2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF81M18pO30KCS5zdDY0e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzU1Xyk7fQoJLnN0NjV7Y2xpcC1wYXRoOnVybCgjU1ZHSURfNTdfKTt9Cgkuc3Q2NntmaWxsOnVybCgjU1ZHSURfNThfKTt9Cgkuc3Q2N3tjbGlwLXBhdGg6dXJsKCNTVkdJRF82MF8pO30KCS5zdDY4e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzYyXyk7fQoJLnN0Njl7ZmlsbDp1cmwoI1NWR0lEXzYzXyk7fQoJLnN0NzB7ZmlsbDpub25lO3N0cm9rZTp1cmwoI1NWR0lEXzY0Xyk7c3Ryb2tlLXdpZHRoOjI7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0NzF7Y2xpcC1wYXRoOnVybCgjU1ZHSURfNjZfKTt9Cgkuc3Q3MntjbGlwLXBhdGg6dXJsKCNTVkdJRF82OF8pO30KCS5zdDcze2ZpbGw6dXJsKCNTVkdJRF82OV8pO30KCS5zdDc0e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzcxXyk7fQoJLnN0NzV7Y2xpcC1wYXRoOnVybCgjU1ZHSURfNzNfKTt9Cgkuc3Q3NntmaWxsOnVybCgjU1ZHSURfNzRfKTt9Cgkuc3Q3N3tjbGlwLXBhdGg6dXJsKCNTVkdJRF83Nl8pO30KCS5zdDc4e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzc4Xyk7fQoJLnN0Nzl7ZmlsbDp1cmwoI1NWR0lEXzc5Xyk7fQoJLnN0ODB7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzgwXyk7fQoJLnN0ODF7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDp1cmwoI1NWR0lEXzgxXyk7fQoJLnN0ODJ7Y2xpcC1wYXRoOnVybCgjU1ZHSURfODNfKTt9Cgkuc3Q4M3tjbGlwLXBhdGg6dXJsKCNTVkdJRF84NV8pO30KCS5zdDg0e2ZpbGw6dXJsKCNTVkdJRF84Nl8pO30KCS5zdDg1e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF84N18pO30KCS5zdDg2e2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6dXJsKCNTVkdJRF84OF8pO30KCS5zdDg3e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzkwXyk7fQoJLnN0ODh7Y2xpcC1wYXRoOnVybCgjU1ZHSURfOTJfKTt9Cgkuc3Q4OXtmaWxsOnVybCgjU1ZHSURfOTNfKTt9Cgkuc3Q5MHtmaWxsOm5vbmU7c3Ryb2tlOnVybCgjU1ZHSURfOTRfKTtzdHJva2Utd2lkdGg6MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3Q5MXtmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfOTVfKTt9Cgkuc3Q5MntmaWxsLXJ1bGU6ZXZlbm9kZDtjbGlwLXJ1bGU6ZXZlbm9kZDtmaWxsOnVybCgjU1ZHSURfOTZfKTt9Cgkuc3Q5M3tjbGlwLXBhdGg6dXJsKCNTVkdJRF85OF8pO30KCS5zdDk0e2NsaXAtcGF0aDp1cmwoI1NWR0lEXzEwMF8pO30KCS5zdDk1e2ZpbGw6dXJsKCNTVkdJRF8xMDFfKTt9Cgkuc3Q5NntjbGlwLXBhdGg6dXJsKCNTVkdJRF8xMDNfKTt9Cgkuc3Q5N3tjbGlwLXBhdGg6dXJsKCNTVkdJRF8xMDVfKTt9Cgkuc3Q5OHtmaWxsOnVybCgjU1ZHSURfMTA2Xyk7fQoJLnN0OTl7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTA4Xyk7fQoJLnN0MTAwe2NsaXAtcGF0aDp1cmwoI1NWR0lEXzExMF8pO30KCS5zdDEwMXtmaWxsOnVybCgjU1ZHSURfMTExXyk7fQoJLnN0MTAye2ZpbGw6I0ZGRkZGRjtzdHJva2U6I0IzQkNDNztzdHJva2Utd2lkdGg6MC4yNzU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTAze2NsaXAtcGF0aDp1cmwoI1NWR0lEXzExM18pO30KCS5zdDEwNHtmaWxsOiNGREQxMzg7fQoJLnN0MTA1e2ZpbGw6I0ZDQTYyRjt9Cgkuc3QxMDZ7ZmlsbDojRkI3OTI3O30KCS5zdDEwN3tmaWxsOiNGNDRCMjI7fQoJLnN0MTA4e2ZpbGw6I0Q4MTkxNTt9Cgkuc3QxMDl7ZmlsbDojMkQyRDJEO3N0cm9rZTojRkZGRkZGO3N0cm9rZS13aWR0aDowLjMzNTQ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTEwe2ZpbGw6bm9uZTtzdHJva2U6IzY1NzI3RjtzdHJva2Utd2lkdGg6MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMTF7ZmlsbDpub25lO3N0cm9rZTojNjU3MjdGO3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDExMntmaWxsOnVybCgjU1ZHSURfMTE0Xyk7fQoJLnN0MTEze2ZpbGw6I0QwNkM1MDt9Cgkuc3QxMTR7ZmlsbDojMkQyRDJEO3N0cm9rZTojQjNCQ0M3O3N0cm9rZS13aWR0aDowLjI3NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMTV7b3BhY2l0eTowLjI7fQoJLnN0MTE2e2ZpbGw6bm9uZTtzdHJva2U6IzY3NzM4MDtzdHJva2Utd2lkdGg6MC4zNTY0O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDExN3tmaWxsOm5vbmU7c3Ryb2tlOiM2NzczODA7c3Ryb2tlLXdpZHRoOjAuMzU2NDtzdHJva2UtbWl0ZXJsaW1pdDoxMDtzdHJva2UtZGFzaGFycmF5OjEuMDIxMiwxLjAyMTI7fQoJLnN0MTE4e2ZpbGw6bm9uZTtzdHJva2U6IzY3NzM4MDtzdHJva2Utd2lkdGg6MC4zNTY0O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MS4wMjA1LDEuMDIwNTt9Cgkuc3QxMTl7b3BhY2l0eTowLjI7ZmlsbDpub25lO30KCS5zdDEyMHtmaWxsOm5vbmU7c3Ryb2tlOiM2NzczODA7c3Ryb2tlLXdpZHRoOjAuMzY4OTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMjF7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjM2ODk7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLWRhc2hhcnJheToxLjA1MDksMS4wNTA5O30KCS5zdDEyMntvcGFjaXR5OjAuMztmaWxsOiMxRjYzRUM7fQoJLnN0MTIze2ZpbGw6IzJEMkQyRDtzdHJva2U6I0ZGRkZGRjtzdHJva2Utd2lkdGg6MC4zMTYyO3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEyNHtmaWxsOiNGRkZGRkY7c3Ryb2tlOiNCM0JDQzc7c3Ryb2tlLXdpZHRoOjAuMzE2MjtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMjV7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTE4Xyk7fQoJLnN0MTI2e2ZpbGw6dXJsKCNTVkdJRF8xMTlfKTt9Cgkuc3QxMjd7ZmlsbDpub25lO3N0cm9rZTojREZFMkU3O3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEyOHtmaWxsOiM5REExQTU7c3Ryb2tlOiNGRkZGRkY7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTI5e2ZpbGw6dXJsKCNTVkdJRF8xMjBfKTt9Cgkuc3QxMzB7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEzMXtvcGFjaXR5OjAuNDt9Cgkuc3QxMzJ7Y2xpcC1wYXRoOnVybCgjU1ZHSURfMTIyXyk7fQoJLnN0MTMze2NsaXAtcGF0aDp1cmwoI1NWR0lEXzEyNF8pO30KCS5zdDEzNHtmaWxsOnVybCgjU1ZHSURfMTI1Xyk7fQoJLnN0MTM1e2ZpbGw6bm9uZTtzdHJva2U6IzgzOTJBMztzdHJva2Utd2lkdGg6MC4zNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxMzZ7ZmlsbDpub25lO3N0cm9rZTojODM5MkEzO3N0cm9rZS13aWR0aDowLjM1O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MC45OTUxLDAuOTk1MTt9Cgkuc3QxMzd7ZmlsbDpub25lO3N0cm9rZTojODM5MkEzO3N0cm9rZS13aWR0aDowLjM1O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MS4wMDQsMS4wMDQ7fQoJLnN0MTM4e2ZpbGw6bm9uZTtzdHJva2U6dXJsKCNTVkdJRF8xMjZfKTtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDEzOXtmaWxsOnVybCgjU1ZHSURfMTI3Xyk7fQoJLnN0MTQwe2ZpbGw6bm9uZTtzdHJva2U6I0RERTBFNDtzdHJva2Utd2lkdGg6MC4zNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNDF7ZmlsbDojMkQyRDJEO3N0cm9rZTojQTlCM0JFO3N0cm9rZS13aWR0aDowLjI3NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNDJ7ZmlsbC1ydWxlOmV2ZW5vZGQ7Y2xpcC1ydWxlOmV2ZW5vZGQ7ZmlsbDojMTI2RUY0O30KCS5zdDE0M3tmaWxsOiNGRkZGRkY7c3Ryb2tlOiNCMUJBQzQ7c3Ryb2tlLXdpZHRoOjAuMjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE0NHtmaWxsOiNDRTZDNTA7fQoJLnN0MTQ1e2ZpbGw6IzVCNUI1Qjt9Cgkuc3QxNDZ7ZmlsbDojODM5MkEzO30KCS5zdDE0N3tmaWxsOm5vbmU7c3Ryb2tlOnVybCgjU1ZHSURfMTI4Xyk7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNDh7ZmlsbDp1cmwoI1NWR0lEXzEyOV8pO30KCS5zdDE0OXtmaWxsOm5vbmU7c3Ryb2tlOiNCNUJEQzQ7c3Ryb2tlLXdpZHRoOjAuNztzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNTB7b3BhY2l0eTowLjY7ZmlsbDpub25lO3N0cm9rZTojNzg4MzhFO3N0cm9rZS13aWR0aDowLjM1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE1MXtvcGFjaXR5OjAuMjtmaWxsOm5vbmU7c3Ryb2tlOiM4MzkyQTM7c3Ryb2tlLXdpZHRoOjAuMzU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLWRhc2hhcnJheToxLDE7fQoJLnN0MTUye2ZpbGw6bm9uZTtzdHJva2U6I0RERTBFNDtzdHJva2Utd2lkdGg6MC43NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNTN7ZmlsbDpub25lO3N0cm9rZTojODM5MkEzO3N0cm9rZS13aWR0aDowLjU7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTU0e29wYWNpdHk6MC4yO2ZpbGw6bm9uZTtzdHJva2U6IzY3NzM4MDtzdHJva2Utd2lkdGg6MC4zNTY0O3N0cm9rZS1taXRlcmxpbWl0OjEwO3N0cm9rZS1kYXNoYXJyYXk6MS4wMTgyLDEuMDE4Mjt9Cgkuc3QxNTV7ZmlsbDpub25lO3N0cm9rZTojRERFMEU0O3N0cm9rZS13aWR0aDowLjc2NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNTZ7ZmlsbDp1cmwoI1NWR0lEXzEzMF8pO30KCS5zdDE1N3tmaWxsOnVybCgjU1ZHSURfMTMxXyk7fQoJLnN0MTU4e2ZpbGw6I0IxQkFDNDt9Cgkuc3QxNTl7ZmlsbDojQ0JEMUQ4O30KCS5zdDE2MHtmaWxsOiMwQjFCMkI7fQoJLnN0MTYxe2ZpbGw6IzkxRDExOTt9Cgkuc3QxNjJ7b3BhY2l0eTowLjc7fQoJLnN0MTYze2ZpbGw6I0ZGRkZGRjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MC40NDE4O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE2NHtmaWxsOm5vbmU7c3Ryb2tlOiM5MzlDQUE7c3Ryb2tlLXdpZHRoOjAuMjIwOTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNjV7ZmlsbDpub25lO3N0cm9rZTojRkZGRkZGO3N0cm9rZS13aWR0aDozLjA5MjQ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTY2e2ZpbGw6dXJsKCNTVkdJRF8xMzJfKTt9Cgkuc3QxNjd7ZmlsbDpub25lO3N0cm9rZTp1cmwoI1NWR0lEXzEzM18pO3N0cm9rZS13aWR0aDoxLjcxNDtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxNjh7ZmlsbDp1cmwoI1NWR0lEXzEzNF8pO30KCS5zdDE2OXtmaWxsOnVybCgjU1ZHSURfMTM1Xyk7fQoJLnN0MTcwe2ZpbGw6dXJsKCNTVkdJRF8xMzZfKTt9Cgkuc3QxNzF7ZmlsbDp1cmwoI1NWR0lEXzEzN18pO30KCS5zdDE3MntmaWxsOnVybCgjU1ZHSURfMTM4Xyk7fQoJLnN0MTcze2ZpbGw6dXJsKCNTVkdJRF8xMzlfKTt9Cgkuc3QxNzR7ZmlsbDp1cmwoI1NWR0lEXzE0MF8pO30KCS5zdDE3NXtmaWxsOnVybCgjU1ZHSURfMTQxXyk7fQoJLnN0MTc2e2ZpbGw6dXJsKCNTVkdJRF8xNDJfKTt9Cgkuc3QxNzd7ZmlsbDp1cmwoI1NWR0lEXzE0M18pO30KCS5zdDE3OHtmaWxsOnVybCgjU1ZHSURfMTQ0Xyk7fQoJLnN0MTc5e2ZpbGw6bm9uZTtzdHJva2U6IzFGNjNFQztzdHJva2Utd2lkdGg6NDtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxODB7ZmlsbDpub25lO3N0cm9rZTojMEIxQjJCO3N0cm9rZS13aWR0aDo0O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE4MXtmaWxsOm5vbmU7c3Ryb2tlOiM2NzczODA7c3Ryb2tlLXdpZHRoOjAuMzk4OTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxODJ7ZmlsbDpub25lO3N0cm9rZTojNjc3MzgwO3N0cm9rZS13aWR0aDowLjM5ODk7c3Ryb2tlLW1pdGVybGltaXQ6MTA7c3Ryb2tlLWRhc2hhcnJheToxLjE0LDEuMTQ7fQoJLnN0MTgze2ZpbGw6IzI1N0FGMTt9Cgkuc3QxODR7b3BhY2l0eTowLjM7ZmlsbDojRkZGRkZGO30KCS5zdDE4NXtmaWxsOm5vbmU7c3Ryb2tlOiM5OEE1QjI7c3Ryb2tlLXdpZHRoOjQ7c3Ryb2tlLW1pdGVybGltaXQ6MTA7fQoJLnN0MTg2e2ZpbGw6bm9uZTtzdHJva2U6IzY1NzI3RjtzdHJva2Utd2lkdGg6MC4zOTg5O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE4N3tmaWxsOm5vbmU7c3Ryb2tlOiM2NTcyN0Y7c3Ryb2tlLXdpZHRoOjAuMzk4OTtzdHJva2UtbWl0ZXJsaW1pdDoxMDtzdHJva2UtZGFzaGFycmF5OjEuMTQsMS4xNDt9Cgkuc3QxODh7ZmlsbDpub25lO3N0cm9rZTojRERERkU0O3N0cm9rZS13aWR0aDowLjc1O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KCS5zdDE4OXtmaWxsOiM5QTlFQTI7fQoJLnN0MTkwe2ZpbGwtcnVsZTpldmVub2RkO2NsaXAtcnVsZTpldmVub2RkO2ZpbGw6IzMyNjdBQzt9Cgkuc3QxOTF7ZmlsbDojRkZGRkZGO3N0cm9rZTojQUZCOEMzO3N0cm9rZS13aWR0aDowLjI3NTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cgkuc3QxOTJ7ZmlsbDojQzU2OTRFO30KCS5zdDE5M3tmaWxsOiM4MTkyQTI7fQoJLnN0MTk0e2ZpbGw6IzJEMkQyRDtzdHJva2U6I0ZGRkZGRjtzdHJva2Utd2lkdGg6MC42MzE3O3N0cm9rZS1taXRlcmxpbWl0OjEwO30KPC9zdHlsZT4KPGcgaWQ9IuWbvuWxgl8yIj4KPC9nPgo8ZyBpZD0i5Zu+5bGCXzEiPgoJPHBhdGggY2xhc3M9InN0MTk0IiBkPSJNMjQuNTEsMjguNTFINS40OWMtMi4yMSwwLTQtMS43OS00LTRWNS40OWMwLTIuMjEsMS43OS00LDQtNGgxOS4wM2MyLjIxLDAsNCwxLjc5LDQsNHYxOS4wMyAgIEMyOC41MSwyNi43MiwyNi43MiwyOC41MSwyNC41MSwyOC41MXoiLz4KCTxnPgoJCTxnPgoJCQk8Zz4KCQkJCTxnPgoJCQkJCTxwYXRoIGNsYXNzPSJzdDIzIiBkPSJNMTUuNDcsNy4xbC0xLjMsMS44NWMtMC4yLDAuMjktMC41NCwwLjQ3LTAuOSwwLjQ3aC03LjFWNy4wOUM2LjE2LDcuMSwxNS40Nyw3LjEsMTUuNDcsNy4xeiIvPgoJCQkJCTxwb2x5Z29uIGNsYXNzPSJzdDIzIiBwb2ludHM9IjI0LjMsNy4xIDEzLjE0LDIyLjkxIDUuNywyMi45MSAxNi44Niw3LjEgICAgICAiLz4KCQkJCQk8cGF0aCBjbGFzcz0ic3QyMyIgZD0iTTE0LjUzLDIyLjkxbDEuMzEtMS44NmMwLjItMC4yOSwwLjU0LTAuNDcsMC45LTAuNDdoNy4wOXYyLjMzSDE0LjUzeiIvPgoJCQkJPC9nPgoJCQk8L2c+CgkJPC9nPgoJPC9nPgo8L2c+Cjwvc3ZnPg==", "openai": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4MDAiIGhlaWdodD0iODAwIiB2aWV3Qm94PSIwIDAgMjQgMjQiPjxwYXRoIGQ9Ik0yMi4yODIgOS44MjFhNiA2IDAgMCAwLS41MTYtNC45MSA2LjA1IDYuMDUgMCAwIDAtNi41MS0yLjlBNi4wNjUgNi4wNjUgMCAwIDAgNC45ODEgNC4xOGE2IDYgMCAwIDAtMy45OTggMi45IDYuMDUgNi4wNSAwIDAgMCAuNzQzIDcuMDk3IDUuOTggNS45OCAwIDAgMCAuNTEgNC45MTEgNi4wNSA2LjA1IDAgMCAwIDYuNTE1IDIuOUE2IDYgMCAwIDAgMTMuMjYgMjRhNi4wNiA2LjA2IDAgMCAwIDUuNzcyLTQuMjA2IDYgNiAwIDAgMCAzLjk5Ny0yLjkgNi4wNiA2LjA2IDAgMCAwLS43NDctNy4wNzNNMTMuMjYgMjIuNDNhNC40OCA0LjQ4IDAgMCAxLTIuODc2LTEuMDRsLjE0MS0uMDgxIDQuNzc5LTIuNzU4YS44LjggMCAwIDAgLjM5Mi0uNjgxdi02LjczN2wyLjAyIDEuMTY4YS4wNy4wNyAwIDAgMSAuMDM4LjA1MnY1LjU4M2E0LjUwNCA0LjUwNCAwIDAgMS00LjQ5NCA0LjQ5NE0zLjYgMTguMzA0YTQuNDcgNC40NyAwIDAgMS0uNTM1LTMuMDE0bC4xNDIuMDg1IDQuNzgzIDIuNzU5YS43Ny43NyAwIDAgMCAuNzggMGw1Ljg0My0zLjM2OXYyLjMzMmEuMDguMDggMCAwIDEtLjAzMy4wNjJMOS43NCAxOS45NWE0LjUgNC41IDAgMCAxLTYuMTQtMS42NDZNMi4zNCA3Ljg5NmE0LjUgNC41IDAgMCAxIDIuMzY2LTEuOTczVjExLjZhLjc3Ljc3IDAgMCAwIC4zODguNjc3bDUuODE1IDMuMzU0LTIuMDIgMS4xNjhhLjA4LjA4IDAgMCAxLS4wNzEgMGwtNC44My0yLjc4NkE0LjUwNCA0LjUwNCAwIDAgMSAyLjM0IDcuODcyem0xNi41OTcgMy44NTUtNS44MzMtMy4zODdMMTUuMTE5IDcuMmEuMDguMDggMCAwIDEgLjA3MSAwbDQuODMgMi43OTFhNC40OTQgNC40OTQgMCAwIDEtLjY3NiA4LjEwNXYtNS42NzhhLjc5Ljc5IDAgMCAwLS40MDctLjY2N20yLjAxLTMuMDIzLS4xNDEtLjA4NS00Ljc3NC0yLjc4MmEuNzguNzggMCAwIDAtLjc4NSAwTDkuNDA5IDkuMjNWNi44OTdhLjA3LjA3IDAgMCAxIC4wMjgtLjA2MWw0LjgzLTIuNzg3YTQuNSA0LjUgMCAwIDEgNi42OCA0LjY2em0tMTIuNjQgNC4xMzUtMi4wMi0xLjE2NGEuMDguMDggMCAwIDEtLjAzOC0uMDU3VjYuMDc1YTQuNSA0LjUgMCAwIDEgNy4zNzUtMy40NTNsLS4xNDIuMDhMOC43MDQgNS40NmEuOC44IDAgMCAwLS4zOTMuNjgxem0xLjA5Ny0yLjM2NSAyLjYwMi0xLjUgMi42MDcgMS41djIuOTk5bC0yLjU5NyAxLjUtMi42MDctMS41WiIvPjwvc3ZnPg==", "deepseek": "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyBpZD0iTGF5ZXJfMiIgZGF0YS1uYW1lPSJMYXllciAyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNzcuMSAyNzcuODYiPgogIDxkZWZzPgogICAgPHN0eWxlPgogICAgICAuY2xzLTEgewogICAgICAgIGZpbGw6ICM0ZDZiZmU7CiAgICAgICAgc3Ryb2tlLXdpZHRoOiAwcHg7CiAgICAgIH0KICAgIDwvc3R5bGU+CiAgPC9kZWZzPgogIDxnIGlkPSJMYXllcl8xLTIiIGRhdGEtbmFtZT0iTGF5ZXIgMSI+CiAgICA8cGF0aCBpZD0icGF0aCIgY2xhc3M9ImNscy0xIiBkPSJNMzczLjE1LDIzLjMyYy00LTEuOTUtNS43MiwxLjc3LTguMDYsMy42Ni0uNzkuNjItMS40NywxLjQzLTIuMTQsMi4xNC01Ljg1LDYuMjYtMTIuNjcsMTAuMzYtMjEuNTcsOS44Ni0xMy4wNC0uNzEtMjQuMTYsMy4zOC0zMy45OSwxMy4zNy0yLjA5LTEyLjMxLTkuMDQtMTkuNjYtMTkuNi0yNC4zOC01LjU0LTIuNDUtMTEuMTMtNC45LTE0Ljk5LTEwLjIzLTIuNzEtMy43OC0zLjQ0LTgtNC44MS0xMi4xNi0uODUtMi41MS0xLjcyLTUuMDktNC42LTUuNTItMy4xMy0uNS00LjM2LDIuMTQtNS41OCw0LjM0LTQuOTMsOC45OS02LjgyLDE4LjkyLTYuNjUsMjguOTcuNDMsMjIuNTgsOS45Nyw0MC41NiwyOC44OSw1My4zNywyLjE2LDEuNDYsMi43MSwyLjk1LDIuMDMsNS4wOS0xLjI5LDQuNC0yLjgyLDguNjgtNC4xOSwxMy4wOS0uODUsMi44Mi0yLjE0LDMuNDQtNS4xNSwyLjItMTAuMzktNC4zNC0xOS4zNy0xMC43Ni0yNy4yOS0xOC41NS0xMy40Ni0xMy4wMi0yNS42My0yNy40MS00MC44MS0zOC42Ny0zLjU3LTIuNjQtNy4xMi01LjA5LTEwLjgxLTcuNDEtMTUuNDktMTUuMDcsMi4wMy0yNy40NSw2LjA4LTI4LjksNC4yNS0xLjUyLDEuNDctNi43OS0xMi4yMy02LjczLTEzLjY5LjA2LTI2LjI0LDQuNjUtNDIuMjEsMTAuNzYtMi4zNC45My00Ljc5LDEuNjEtNy4zMiwyLjE0LTE0LjUtMi43My0yOS41NS0zLjM1LTQ1LjI5LTEuNTgtMjkuNjIsMy4zMi01My4yOCwxNy4zNC03MC42OCw0MS4yOEMxLjI5LDg4LjItMy42MywxMjAuODgsMi4zOSwxNTVjNi4zMywzNS45MSwyNC42NCw2NS42OCw1Mi44LDg4Ljk0LDI5LjE4LDI0LjEsNjIuOCwzNS45MSwxMDEuMTUsMzMuNjUsMjMuMjktMS4zMyw0OS4yMy00LjQ2LDc4LjQ4LTI5LjI0LDcuMzgsMy42NiwxNS4xMiw1LjEyLDI3Ljk3LDYuMjMsOS44OS45MywxOS40MS0uNSwyNi43OS0yLjAyLDExLjU1LTIuNDUsMTAuNzUtMTMuMTUsNi41OC0xNS4xMy0zMy44Ny0xNS43OC0yNi40NC05LjM2LTMzLjItMTQuNTQsMTcuMjEtMjAuNDEsNDMuMTUtNDEuNTksNTMuMy0xMTAuMTkuNzktNS40Ni4xMS04Ljg3LDAtMTMuMy0uMDYtMi42Ny41NC0zLjcyLDMuNjEtNC4wMyw4LjQ4LS45NiwxNi43Mi0zLjI5LDI0LjI4LTcuNDcsMjEuOTQtMTIsMzAuNzgtMzEuNjksMzIuODctNTUuMzMuMzEtMy42LS4wNi03LjM1LTMuODYtOS4yNFpNMTgxLjk2LDIzNS45N2MtMzIuODMtMjUuODMtNDguNzQtMzQuMzMtNTUuMzEtMzMuOTYtNi4xNC4zNC01LjA0LDcuMzgtMy42OSwxMS45NywxLjQxLDQuNTMsMy4yNiw3LjY2LDUuODUsMTEuNjMsMS43OCwyLjY0LDMuMDEsNi41Ny0xLjc4LDkuNDktMTAuNTcsNi41OC0yOC45NS0yLjItMjkuODItMi42NC0yMS4zOC0xMi41OS0zOS4yNi0yOS4yNC01MS44Ny01Mi4wMS0xMi4xNi0yMS45Mi0xOS4yMy00NS40My0yMC4zOS03MC41Mi0uMzEtNi4wOCwxLjQ3LTguMjIsNy40OS05LjMsNy45Mi0xLjQ2LDE2LjExLTEuNzcsMjQuMDMtLjYyLDMzLjQ5LDQuOSw2Mi4wMSwxOS45MSw4NS45LDQzLjYzLDEzLjY1LDEzLjU1LDIzLjk3LDI5LjcxLDM0LjYxLDQ1LjQ5LDExLjMsMTYuNzgsMjMuNDgsMzIuNzUsMzguOTcsNDUuODQsNS40Niw0LjU5LDkuODMsOC4wOSwxNCwxMC42Ny0xMi41OSwxLjQtMzMuNjIsMS43MS00Ny45OS05LjY4Wk0xOTcuNjksMTM0LjY1YzAtMi43LDIuMTUtNC44NCw0Ljg3LTQuODQuNiwwLDEuMTYuMTIsMS42Ni4zMS42Ny4yNSwxLjI5LjYyLDEuNzcsMS4xOC44Ny44NCwxLjM2LDIuMDgsMS4zNiwzLjM1LDAsMi43LTIuMTUsNC44NC00Ljg1LDQuODRzLTQuODEtMi4xNC00LjgxLTQuODRaTTI0Ni41NSwxNTkuNzdjLTMuMTMsMS4yNy02LjI2LDIuMzktOS4yNywyLjUxLTQuNjcuMjItOS43Ny0xLjY4LTEyLjU1LTQtNC4zLTMuNi03LjM2LTUuNjEtOC42Ny0xMS45NC0uNTQtMi43LS4yMy02Ljg1LjI1LTkuMjQsMS4xMi01LjE1LS4xMi04LjQ0LTMuNzQtMTEuNDQtMi45Ni0yLjQ1LTYuNy0zLjEtMTAuODItMy4xLTEuNTQsMC0yLjk1LS42OC00LTEuMjQtMS43Mi0uODctMy4xMy0zLjAxLTEuNzgtNS42NC40My0uODQsMi41My0yLjkyLDMuMDItMy4yOSw1LjU4LTMuMTksMTIuMDMtMi4xNCwxOCwuMjUsNS41NCwyLjI2LDkuNzEsNi40MiwxNS43MiwxMi4yOCw2LjE2LDcuMSw3LjI2LDkuMDksMTAuNzYsMTQuMzksMi43Niw0LjE5LDUuMjksOC40Nyw3LjAxLDEzLjM3LDEuMDQsMy4wNC0uMzEsNS41NS0zLjk0LDcuMVoiLz4KICA8L2c+Cjwvc3ZnPg==", "claude": "data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Crect%20width%3D%2224%22%20height%3D%2224%22%20rx%3D%225%22%20fill%3D%22%23D97757%22%2F%3E%3Cpath%20d%3D%22M12%205.5v13M5.5%2012h13M7.4%207.4l9.2%209.2M16.6%207.4l-9.2%209.2%22%20stroke%3D%22%23FCFCFB%22%20stroke-width%3D%221.7%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E", "bailian": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAQKADAAQAAAABAAAAQAAAAABGUUKwAAAJQUlEQVR4Ae1bb0wcxxV/s7t33MHB3QEHxMQY4dixTQIGOTSOGtlJg63GlhtUGaeWUOw2ieumlU2ctiSqbFCU1o5JQtoq7Zc0rSJFbT4kVtWqSlVVVK6UVrWCSRRVlasGJ7V9+IwPODiO2z/Tt8DCcbe7N/vnLh/qs6yZefPmvTe/eW/m7ewCcOv3/40A+bym/50v0wqvDA8qFOJeCp+c+RP59POwpegAfP8h2iDx8CJO9kDmhCmF10ka+l4aJjcy6YWuFw0AXPESXPFeIPAjo0lRAIr/TnMALwz+kcwa8blJLwoAJ3bRx3Diz6Pha1mMRyD+iSD0D75H3mbhd8JTUACe2UXvogR+gQbeY9PIfyAQJ86+R87bHJ93WEEA6NtDw6IEr6L2nrwWsDBQeM3jgR+c/j2Js7Bb4XEZACo8vRuOoNCX0QivFUMYeNO4P/SleXjtJ38g8wz8TCyuAdDbSbs4AoMY601Mmm0yVa+F95vugRcPHCHnbIpYNcwxAN/tpBtkAmcIga5Vkl1ulAQg3tQOqWAN3LYk+qKoQOfBI86OTdsAqImMR4EBFHDc5bmuEkc4iK9thsSaO6FhVcdKY0gQYKDrMJlcIbHXLAPQ30+5xPvwdVQxgP/XsKuyzJmubYLp25vB7ymBsnyjMZE63P0k+WU+vux+SwBgnO/guIXdvTVbkJvtsiD8d+N9ECgpg5BFuRcV9Eor+wMTAAvpqwBncBd+1KJBltgFL9xYvw0gvAaqLQ3MZf4dhkUPS1jkBQCzuD5MZn6IjHl5c+1go+AGOosxHqvfAo3oYa798EHr6IEnyc/NBJpO6und9BVkKOgmV90A19e1QhlLnJtNxKgP8ez96hNkyKhfMOqo33y5Zzw1d7DO5zdicUT3l8N1PM/nyithnSNBeQZLCoyZsRh6gNB0aQSdfuvGQGB8R3XEXyrwFWaCWPswzqdwxSGyDoKsY2zyTeLqD5itvirXGID1l/ChbPGHGd7MtnB4qiNcGeEJsZXiqnFedwdM4bFWzgtQrskuRKmeBF4vDDnYBKkgrP+3mG2cl+MnO2si83cEArXZfWbtYC26ezt4bRxrZmL1+oYlCQ5/7SgZ0+vUoxl4gD4AmoCakpLortpaT5XXW6XR9Eqd9FWPzTENvWtMTYT2P0GGrQqzBcCSErG5oiJ2X2VVIHt/YEhfrdppxD+J7v4qJj79Rgz56E4AWJCthkVHOJRqD4VrcSVEK+lrPuPy9Dt6BtBkOwZAE1QueK48vq9momOjv0WjFagcRrkDdtxdzx7XAABKknXtvtLNEd9U95aQHPLxlXoK7dLUOJfxUtVKns+iy3UAlpQm728oi+3ZEFxXIhioYLFukWchzlmPNXaxi5wG1pmfArpKljwgs88ncNNdm4LJjvrSukw6ax139nPqqls51lhla3wFBUBTEvbxnxzaWlnTEPTmfa5fGjOMpWtxrtmhVxYFAE3x1jp/9Ct3Br0m+wNT+qrJc6M0fBhyQ3i2jIvRubqPY3OpBxvLr+1qqrgt89HXSvqaLddJu6gekGlomYe7sb85nGit9V22mr5mynFaL6oHZBqbKJG4l+4dK51rFeeACh44mtlbvHrRPYDykEjsTiYSD6ciWPcsTJUAvvSgPwZBeQHCbbZud3Mgi4+EIM0dB448gu9cz0GktT+HBwlFBSC5bX48vj/ppxVU/26BwjhwdACqW3+mZywzLTaKt1jkFPKHlsZMQqQlrDe+KACIdXI09tisoDRKrJedHwDPH4PK5r/qGW1Ii43sBOD7sX9HDk+kRXeuBd0DqI9OTnYn52e3z1tNhNpBls9D7KNfY3B8D+rv/ixnQpmEayON4OFP4a31oUwyS71QACRnvpS6ObU3WUV9y27IYk8WD30UX7HuRSAGQVYGoa519UcTK3F+DCevuXuWDPOmrlvgpqF7I2QqaikVnt8kjt/smS2RKxVbBpno+AwfuJ6BmrsXP5pQ3Z3wb+DEG03GrHQZhIBrANBaesVzRuZTm0Sr7r5iJEtNhHeBKF4QuD0s7Ms8BgA4DwG85VW+Kc4pB6V6eVlbASoKJGBamoYZaS9K90CAj0IFvv/hCOvGqmuUEwBEZZ98nX5bLMdjrbCrnpCiMC37MVeoX57FjFwHSSUFQeEqlPG2X9LaAoBuUaL0pKweaysGLVvmYiWlRGFSJCAZAKzgFhsX10BCmoCQZwp8XJNV7Zb2ABqiN5W+tEh3Kpauxa0aBTKdwonPwZxizbPK+CSEBBEIyX3pUj3hAfKAlG2LAQAAQsaLERDojNIjTymPi1XAgy9biGttGVILqzkrhXB3Z707yFafhrDnBpTyPOa5KwtlYxMcRsk7lYfkqHI87ccX1oV196Q8DnHJtyrOs6fG1vYuhcUMBD1x8HNqCjxqNNRwD6DN8utKr7SZ3mXRDY00GdFFOg4TacA4X1ktI14rdIkGFuQK+A1yrfcVo6GGIbAwIPbhu1g+YjTYEd1unFtXOgRtHb1Gw8w/R4i0dAGh3zIabIuuPvpOSVcgOi9Y3uSsKVS/O37WbPKqOHMP0BRevVANXu9ZFHhII9kq1TiflgR0d9N3irZkZw6i8BuYl/tg+/axTLJenQ0AbeTER52g0LPYbNVITKVIJyCeFiFtcJ4zCWFiGsVFOgbtHX9h4kYmawBoUq+P4tff5KfYDGgk3XIlfa3B/sXbH11Gh0QK14CnJ+Ffl9+A7m5LGbk9AFR7J/5WAZKvHzgud4MhhMK0iO6+kL7mJiUO55s1fAgCyinYcO90Fp2paR8ATXzsA8zDhbewuXgLo6avcUxfZZePNU2fVhLyDj6190Fb2yWNZKd0DoCmNTa6D25KxyEpP6CRClT+B+8rTkDbF865Id/8GLSiIdL6W7g6/TCAooYEZjYu/ziSQolPwaWxjW5NXrXQPQ/InO+H58Og+J7HtPapTLLtOqFvApc+Bi33x23LMBhYGAA0ZRcvfBGo8jI2bf/JDC7RYdja8bEm0u2ysABo1o78fT9WB9DhNmukPOWnGOcn0dV/lYfPcXdxAFDNHB0tAyX1HILwLLaM9Krp63PQNot/eZL77O54tjoCjAzRYXWJdAHTak4+jYnUN1ZJtJC+rhrnsFF8ADSDR0dvB3l+PT5shSFA/2w3kdHE3SpvIWAPgf8BknQD5+r0aV8AAAAASUVORK5CYII="};
+const AGENT_ICON = {"claudecode": "<svg class=\"agent-ico\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z\" fill=\"#D97757\" fill-rule=\"nonzero\"></path></svg>", "codex": "<svg class=\"agent-ico\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M21.55 10.004a5.416 5.416 0 00-.478-4.501c-1.217-2.09-3.662-3.166-6.05-2.66A5.59 5.59 0 0010.831 1C8.39.995 6.224 2.546 5.473 4.838A5.553 5.553 0 001.76 7.496a5.487 5.487 0 00.691 6.5 5.416 5.416 0 00.477 4.502c1.217 2.09 3.662 3.165 6.05 2.66A5.586 5.586 0 0013.168 23c2.443.006 4.61-1.546 5.361-3.84a5.553 5.553 0 003.715-2.66 5.488 5.488 0 00-.693-6.497v.001zm-8.381 11.558a4.199 4.199 0 01-2.675-.954c.034-.018.093-.05.132-.074l4.44-2.53a.71.71 0 00.364-.623v-6.176l1.877 1.069c.02.01.033.029.036.05v5.115c-.003 2.274-1.87 4.118-4.174 4.123zM4.192 17.78a4.059 4.059 0 01-.498-2.763c.032.02.09.055.131.078l4.44 2.53c.225.13.504.13.73 0l5.42-3.088v2.138a.068.068 0 01-.027.057L9.9 19.288c-1.999 1.136-4.552.46-5.707-1.51h-.001zM3.023 8.216A4.15 4.15 0 015.198 6.41l-.002.151v5.06a.711.711 0 00.364.624l5.42 3.087-1.876 1.07a.067.067 0 01-.063.005l-4.489-2.559c-1.995-1.14-2.679-3.658-1.53-5.63h.001zm15.417 3.54l-5.42-3.088L14.896 7.6a.067.067 0 01.063-.006l4.489 2.557c1.998 1.14 2.683 3.662 1.529 5.633a4.163 4.163 0 01-2.174 1.807V12.38a.71.71 0 00-.363-.623zm1.867-2.773a6.04 6.04 0 00-.132-.078l-4.44-2.53a.731.731 0 00-.729 0l-5.42 3.088V7.325a.068.068 0 01.027-.057L14.1 4.713c2-1.137 4.555-.46 5.707 1.513.487.833.664 1.809.499 2.757h.001zm-11.741 3.81l-1.877-1.068a.065.065 0 01-.036-.051V6.559c.001-2.277 1.873-4.122 4.181-4.12.976 0 1.92.338 2.671.954-.034.018-.092.05-.131.073l-4.44 2.53a.71.71 0 00-.365.623l-.003 6.173v.002zm1.02-2.168L12 9.25l2.414 1.375v2.75L12 14.75l-2.415-1.375v-2.75z\"></path></svg>", "openclaw": "<svg class=\"agent-ico\" viewBox=\"0 0 120 120\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z\" fill=\"#ef4444\"/><path d=\"M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z\" fill=\"#ef4444\"/><path d=\"M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z\" fill=\"#ef4444\"/><path d=\"M45 15 Q35 5 30 8\" stroke=\"#ff4d4d\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M75 15 Q85 5 90 8\" stroke=\"#ff4d4d\" stroke-width=\"3\" stroke-linecap=\"round\"/><circle cx=\"45\" cy=\"35\" r=\"6\" fill=\"#050810\"/><circle cx=\"75\" cy=\"35\" r=\"6\" fill=\"#050810\"/><circle cx=\"46\" cy=\"34\" r=\"2.5\" fill=\"#00e5cc\"/><circle cx=\"76\" cy=\"34\" r=\"2.5\" fill=\"#00e5cc\"/></svg>", "pi": "<svg class=\"agent-ico\" viewBox=\"0 0 800 800\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"#F09082\" d=\"M165.29 165.29H517.36V400H400V282.65H165.29Z\"/><path fill=\"#4D9ABF\" d=\"M165.29 282.65H282.65V400H400V517.36H282.65V634.72H165.29Z\"/><path fill=\"#F1BE58\" d=\"M517.36 400H634.72V634.72H517.36Z\"/></svg>"};
+const provIcon = (p) => {
+  const hay = `${p?.id ?? ''} ${p?.name ?? ''} ${p?.badge ?? ''}`.toLowerCase();
+  if (p?.type === 'glm') return { src: PICON.zhipu, cls: '' };
+  if (p?.type === 'codex') return { src: PICON.openai, cls: 'invert-d' };
+  if (p?.type === 'claude') return { src: PICON.claude, cls: '' };
+  if (p?.type === 'dashscope') return { src: PICON.bailian, cls: '' };
+  if (p?.type === 'openai') return hay.includes('deepseek') ? { src: PICON.deepseek, cls: '' } : { src: PICON.openai, cls: 'invert-d' };
+  return { src: PICON.openai, cls: 'invert-d' };
+};
+const provLogo = (p, sm = false) => { const i = provIcon(p); return `<img class="prov-logo ${i.cls}${sm ? ' sm' : ''}" src="${i.src}" alt="" width="${sm ? 22 : 28}" height="${sm ? 22 : 28}">`; };
+/* ── 名称与颜色（颜色跟实体走：按全期用量一次性分配，筛选不重排） ── */
+const UNATTR = '__unattr'; // 密钥→Agent 映射 2026-10-26 上线：此前的流量 client 为空，已按模型归因入库（按模型归因到默认 Agent，其余 → 其他）
+// 来源名称与应用密钥页实体对齐（claude-sub-sync/codex-local-* 已在后端写入时归并为同名 Agent），不留订阅式别名
+let SRC_LABEL;
+labelUpdates.push(() => { SRC_LABEL = { [UNATTR]: t('其他'), __other: t('其他'), __unmarked__: t('其他'), shared: t('共享密钥'), probe: t('探测') }; });
+labelUpdates.at(-1)();
+const srcLabel = (c) => SRC_LABEL[c] ?? (c || t('其他'));
+/* 来源分类：Agent（应用密钥中的 Agent，含并入的订阅直连导入）vs 应用（其余 key/其他）——趋势分区与来源页分组共用 */
+const isAgentClient = (c) => !!AGENTS[c];
+// 模型 id 只是显示时把尾部的 major-minor 版本号换成点（claude-opus-5-5 → claude-opus-5.5）；数据层仍用原 id 匹配
+const MODEL_NAMES = new Map(); // id → 标准展示名（后端 models.dev 单一权威下发）；未命中时退回点号化 id
+const modelLabel = (id) => MODEL_NAMES.get(id) ?? String(id ?? '').replace(/-(\d+)-(\d+)$/, '-$1.$2');
+let PROV = {};
+const provName = (id) => PROV[id]?.name ?? ({ 'codex-local': t('Codex 本地订阅'), claude: 'Claude' }[id] ?? id ?? '—');
+let AGENTS = {};
+const agentIcon = (app) => { const a = AGENTS[app]; return a ? (AGENT_ICON[a.iconKind] ?? '') : ''; };
+function rankColors(rows, key) {
+  const tot = new Map();
+  for (const r of rows) tot.set(r[key] ?? '', (tot.get(r[key] ?? '') ?? 0) + r.tokens);
+  const order = [...tot.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+  return new Map(order.map((k, i) => [k, i < 10 ? `var(--c${i + 1})` : 'var(--c-other)']));
+}
+let SRC_COLOR = new Map();
+let MODEL_COLOR = new Map();
+let PROV_COLOR = new Map();
+const srcColor = (c) => SRC_COLOR.get(c === UNATTR ? '' : (c ?? '')) ?? 'var(--c-other)';
+const modelColor = (m) => MODEL_COLOR.get(m ?? '') ?? 'var(--c-other)';
+const provColor = (c) => PROV_COLOR.get(c ?? '') ?? 'var(--c-other)';
+let KINDS;
+labelUpdates.push(() => { KINDS = [['input', t('输入'), 'var(--tok-in)'], ['output', t('输出'), 'var(--tok-out)'], ['cacheWrite', t('缓存创建'), 'var(--tok-cc)'], ['cacheRead', t('缓存命中'), 'var(--tok-cr)']]; });
+labelUpdates.at(-1)();
+let KIND_LABEL;
+labelUpdates.push(() => { KIND_LABEL = { served: t('经网关'), observed: t('订阅直连') }; });
+labelUpdates.at(-1)();
+
+/* ── 状态与路由 ── */
+const state = Object.assign({ kind: 'all', trendRange: 30, trendView: 'total', trendGroup: 'client', srcPeriod: 30, srcGroup: '', modelPeriod: 30, chanPeriod: 'all', logFilter: 'all', evFilter: 'all', logLimit: 50, evLimit: 30 }, store.get('state', {}));
+const save = () => store.set('state', state);
+let SECTIONS;
+labelUpdates.push(() => { SECTIONS = [
+  { id: 'overview', label: t('概览'), views: [['overview', t('概览')]] },
+  { id: 'usage', label: t('用量'), views: [['usage-summary', t('总览')], ['usage-trends', t('趋势')], ['usage-channels', t('渠道')], ['usage-sources', t('来源')], ['usage-models', t('模型')], ['usage-devices', t('设备')]] },
+  { id: 'gateway', label: t('网关'), views: [['gateway-catalog', t('渠道与模型')], ['gateway-suggestions', t('模型建议')], ['gateway-keys', t('应用密钥')]] },
+  { id: 'logs', label: t('日志'), views: [['logs-requests', t('请求')], ['logs-events', t('事件')]] },
+]; });
+labelUpdates.at(-1)();
+let pending = 0;
+function sectionOf(view) { return SECTIONS.find((s) => s.views.some(([v]) => v === view)) ?? SECTIONS[0]; }
+function currentView() { const h = location.hash.slice(1).split('/')[0]; return SECTIONS.some((s) => s.views.some(([v]) => v === h)) ? h : 'overview'; }
+const hashParam = () => { const p = location.hash.split('/')[1]; try { return p ? decodeURIComponent(p) : ''; } catch { return p ?? ''; } };
+
+function renderNav(view) {
+  const sec = sectionOf(view);
+  $('#nav1').innerHTML = SECTIONS.map((s) => `<a href="#${s.views[0][0]}" ${s === sec ? 'aria-current="page"' : ''}>${s.label}${s.id === 'gateway' && pending ? `<span class="count" aria-label="${t('{v1} 条待处理', { v1: pending })}">${pending}</span>` : ''}</a>`).join('');
+}
+function subTabs(view, right = '') {
+  const sec = sectionOf(view);
+  if (sec.views.length < 2) return '';
+  return `<div class="tabs-row"><nav class="tabs2" aria-label="${t('{v1}视角', { v1: sec.label })}">${sec.views.map(([v, l]) => `<a href="#${v}" ${v === view ? 'aria-current="page"' : ''}>${l}${v === 'gateway-suggestions' && pending ? `<span class="count">${pending}</span>` : ''}</a>`).join('')}</nav>${right}</div>`;
+}
+function head(_title, _sub, right = '') {
+  return right ? `<div class="headbar">${right}</div>` : '';
+}
+function seg(name, options, value) {
+  return `<div class="seg" role="group" data-seg="${name}">${options.map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${String(v) === String(value)}">${l}</button>`).join('')}</div>`;
+}
+/* ── 数据切片 ── */
+const kindOk = (r) => state.kind === 'all' || r.kind === state.kind;
+function daysBack(n) { const out = []; for (let i = n - 1; i >= 0; i--) out.push(addDays(TODAY, -i)); return out; }
+function inPeriod(day, period) { return period === 'all' ? true : day >= addDays(TODAY, -(period - 1)); }
+function aggregate(rows, key, period) {
+  const m = new Map();
+  for (const r of rows) {
+    if (!kindOk(r) || !inPeriod(r.day, period)) continue;
+    const k = r[key] ?? null;
+    let a = m.get(k);
+    if (!a) { a = { key: k, kinds: new Set(), tokens: 0, cost: 0, costUnknown: 0, requests: 0, records: 0, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }; m.set(k, a); }
+    a.kinds.add(r.kind); a.tokens += r.tokens; a.cost += r.cost; a.costUnknown += r.costUnknownRecords; a.requests += r.requests; a.records += r.records ?? 0;
+    for (const [u] of KINDS) a.usage[u] += r.usage[u];
+  }
+  return [...m.values()].sort((a, b) => b.tokens - a.tokens);
+}
+// dayModel 没有 kind 维度：kind 筛选时用 day×client×model 近似（90 天内）
+function modelRows() {
+  if (state.kind === 'all') return S.dayModel.map((r) => ({ ...r, kind: 'all' }));
+  const obs = new Set(S.dayClient.filter((r) => r.kind === 'observed').map((r) => r.client ?? ''));
+  return S.clientModel.filter((r) => (state.kind === 'observed') === obs.has(r.client ?? '')).map((r) => ({ ...r, kind: state.kind }));
+}
+function dailyTotals(rows) { const m = new Map(); for (const r of rows) if (kindOk(r)) { const a = m.get(r.day) ?? { tokens: 0, cost: 0, requests: 0 }; a.tokens += r.tokens; a.cost += r.cost; a.requests += r.requests; m.set(r.day, a); } return m; }
+
+/* ── 概览 ── */
+const meterPrev = new Map(store.get('meters', []));
+function level(p) { return p >= 90 ? 'crit' : p >= 60 ? 'warn' : ''; }
+function meterHtml(id, label, tier) {
+  const p = tier.usedPercent, lv = level(p);
+  return `<div class="meter"><div class="meter-row"><span>${label}</span><span class="pct num" data-count="${id}" data-to="${p}">${p}%</span></div>
+    <div class="meter-track" role="progressbar" aria-label="${label}" aria-valuenow="${p}" aria-valuemin="0" aria-valuemax="100"><div class="meter-fill ${lv}" data-meter="${id}" data-to="${p}"></div></div>
+    <div class="meter-foot"><span>${untilTime(tier.resetsAt)}</span></div></div>`;
+}
+let WIN_COPY;
+labelUpdates.push(() => { WIN_COPY = { glm: t('智谱额度每 5 小时一批，新一批要等真实使用才开始计时；旧批一到点，网关立刻发条小消息启动新一批，不浪费订阅时间。'), claude: t('Claude 额度每 5 小时一批。上一批到期后自动启动下一批，避免额度闲置。'), codex: t('ChatGPT 额度每 5 小时刷新一批；旧批一到点，网关立刻发条小消息启动新一批，不浪费订阅时间。') }; });
+labelUpdates.at(-1)();
+let MG_COPY;
+labelUpdates.push(() => { MG_COPY = { dry: t('定期检查模型更新，发现合适的新版本时提供升级建议。目前不会自动更换模型。'), live: t('每天盯厂商动态：在用的模型出新款、没贵过三成就自动换新；贵太多先新旧都留着等你定；全新系列只报告；停售的自动移除。') }; });
+labelUpdates.at(-1)();
+const SVG_BOLT = '<svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M9.5 1 3 9h3.5L6 15l6.5-8H9z"/></svg>';
+const SVG_SHIELD = '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 1.5 13.5 3.5V8c0 3-2.5 5.2-5.5 6.5C5 13.2 2.5 11 2.5 8V3.5Z"/><path d="m5.5 8 2 2 3-3.5"/></svg>';
+function markersHtml(p) {
+  let out = '';
+  if (['glm', 'claude', 'codex'].includes(p.type) && p.activation?.active) out += `<span class="mark" tabindex="0" aria-label="${t('5 小时窗口激活器说明')}" data-tt="${t('5 小时窗口激活器')}" data-tip="${esc((WIN_COPY[p.type] || '') + t('运行轨迹见 日志 › 事件。'))}">${SVG_BOLT}</span>`;
+  const mg = S.features?.modelGuard;
+  if (mg?.enabled) out += `<span class="mark" tabindex="0" aria-label="${t('模型更新说明')}" data-tt="${t('模型更新{v1}', { v1: mg.dryRun ? ' ' + t('· 只建议') : '' })}" data-tip="${esc((mg.dryRun ? MG_COPY.dry : MG_COPY.live) + t('建议出现在 网关 › 模型建议。'))}">${SVG_SHIELD}</span>`;
+  return out;
+}
+function quotaCard(p) {
+  const q = p.quota || {};
+  // 套餐标签：后端已归一化（plan 字段，订阅档位/· 分段末段）；前端只展示，不再拼装厂商前缀
+  const plan = p.plan || p.badge || '';
+  const phase = p.circuit?.phase; // circuit 是对象（phase: closed|open|half_open），老页误比字符串会导致全部显示熔断
+  // 主体（额度数据维度）与芯片（状态维度）解耦：熔断/恢复试探/认证异常是链路状态，
+  // 不该清空额度展示——进度条与重置时间在窗口耗尽等待期正是最需要看的信息。
+  let body = '';
+  if (q.balance) {
+    const neg = Number(q.balance.total) < 0;
+    body = `<div><div class="balance num ${neg ? 'crit' : ''}">¥${Number(q.balance.total).toFixed(2)}</div><div class="muted" style="font-size:12px">${q.balance.granted != null ? t('赠金 ¥{v1} · 充值 ¥{v2}', { v1: q.balance.granted, v2: q.balance.toppedUp }) : (Number(q.balance.cash ?? NaN) !== Number(q.balance.total ?? NaN) ? t('现金 ¥{v1}', { v1: q.balance.cash ?? q.balance.total }) : '')}</div></div>`;
+  } else {
+    body = [q.fiveHour && meterHtml(p.id + ':5h', t('5 小时额度'), q.fiveHour), q.weekly && meterHtml(p.id + ':w', t('本周额度'), q.weekly)].filter(Boolean).join('');
+  }
+  // 芯片优先级：认证/配置异常 > 熔断冷却/恢复试探 > 欠费/待重置/即将用尽 > 正常
+  let chip = `<span class="chip good">${t('{v1}正常', { v1: I.ok })}</span>`;
+  if (p.healthy === false) chip = `<span class="chip crit">${I.crit}${p.healthBasis === 'configuration' ? t('配置异常') : t('认证异常')}</span>`;
+  else if (phase === 'open') chip = `<span class="chip crit">${t('{v1}熔断冷却', { v1: I.crit })}</span>`;
+  else if (phase === 'half_open') chip = `<span class="chip warn">${t('{v1}恢复试探', { v1: I.warn })}</span>`;
+  else if (q.balance) {
+    if (Number(q.balance.total) < 0) chip = `<span class="chip crit">${t('{v1}欠费', { v1: I.crit })}</span>`;
+  } else {
+    const worst = Math.max(q.fiveHour?.usedPercent ?? 0, q.weekly?.usedPercent ?? 0);
+    // 用量高低由进度条本身表达（60% 变黄 / 90% 变红），不再单独设「偏高」状态文案
+    if (worst >= 100) chip = `<span class="chip crit">${t('{v1}待重置', { v1: I.crit })}</span>`;
+    else if (worst >= 90) chip = `<span class="chip warn">${t('{v1}即将用尽', { v1: I.warn })}</span>`;
+  }
+  const snapAt = p.probe?.fetchedAt ?? q.fetchedAt;
+  const probeState = p.probe?.lastError ? `<span style="color:var(--crit)" title="${esc(p.probe.lastError)}">${t('探测失败')}</span> · ` : (p.probe?.stale ? `<span class="muted">${t('历史快照')}</span> · ` : '');
+  const probeBtn = p.probe?.supported ? `<button class="icon-btn" type="button" data-probe="${esc(p.id)}" title="${t('查询本渠道最新额度')}" aria-label="${t('查询 {v1} 最新额度', { v1: esc(p.name) })}">${SVG_RF}</button>` : '';
+  return `<article class="card quota" aria-label="${esc(p.name)}">
+    <div class="q-head">${provLogo(p)}<div><div class="q-name">${esc(p.name)}<span style="margin-left:4px;vertical-align:-3px">${markersHtml(p)}</span></div><div class="q-plan">${esc(plan || '')}</div></div>${chip}</div>
+    <div class="q-body">${body}</div>
+    <div class="q-foot"><span style="display:inline-flex;align-items:center;gap:6px;min-width:0">${probeBtn}${snapAt ? probeState + t('{v1}更新', { v1: MGI18n.lang === 'en' ? relTime(snapAt).replace(/^Just/, 'just') : relTime(snapAt) }) : (probeBtn ? '' : '—')}</span><a class="alink" href="#usage-channels/${encodeURIComponent(p.id)}">${t('查看用量')}</a></div></article>`;
+}
+/* ── 链路拓扑（概览）：配置路由口径 —— 左客户端分区（Mac / NAS / 应用）→ 网关 → 右渠道分组；
+   网关→可路由渠道按目录链序标 ①…；官方订阅直连（claude-code / codex）绕网关虚线。── */
+const EN_TOPO_LABELS = {
+  title: 'Routing',
+  modeGroup: 'Traffic demo mode',
+  modes: {
+    multi: ['Concurrent', 'Random concurrent traffic from many sources'],
+    serial: ['Serial', 'One source at a time, full path'],
+  },
+  demo: 'Simulated', play: 'Play simulation', pause: 'Pause simulation',
+  svgLabel: 'Sources, gateway, channels and models',
+  chainTip: 'Fallback chain: same-color pills and dashed arcs form one chain',
+  device: { mac: 'Mac', nas: 'NAS', unknown: 'Unknown' },
+  apps: 'Apps', gateway: 'Gateway',
+  collector: (label) => `Usage collector (${label})`,
+  chainOf: (id) => `fallback chain ${id}`,
+  chainMember: (names) => ` (${names.join(', ')} member)`,
+  fallback: (from, provider, rewrite) => `${from} falls back → ${provider}${rewrite != null ? ` (as ${rewrite})` : ''}`,
+};
+function topologyHtml() {
+  // provider helper 返回 {href, invert}：拓扑节点是纯 SVG（无 foreignObject，iOS 图标错乱的根治），
+  // 渠道 logo 用 <image> 渲染，暗色反色沿用 .invert-d 的主题门控。
+  // 移动端维持宽画布 + 最小宽度，横向滑动查看。
+  return S ? MGTopology.html(S, {
+    provider: p => { const i = provIcon(p); return { href: i.src, invert: i.cls.includes('invert-d') }; },
+    agent: kind => AGENT_ICON[kind] ?? '',
+    model: modelLabel,
+    labels: MGI18n.lang === 'en' ? EN_TOPO_LABELS : undefined,
+  }) : '';
+}
+
+function viewOverview() {
+  if (!S) return head(t('概览'), t('现在是否正常、额度还剩多少')) + `<div class="view">
+    <section aria-label="${t('订阅额度')}"><div class="card-h" style="margin:4px 0 10px"><h2>${t('订阅额度')}</h2></div><div class="grid-4">${skQuotaCard().repeat(4)}</div></section>
+    <section class="grid-2" aria-label="${t('余额与网关')}">${skQuotaCard().repeat(2)}</section>
+    ${skCard(t('今日网关'), `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">${skBar('76%', 18)}${skBar('76%', 18)}${skBar('76%', 18)}${skBar('76%', 18)}${skBar('76%', 18)}</div>`, 14)}</div>`;
+  const totals = S.today.totals;
+  const rate = totals.requests ? totals.ok / totals.requests : 1;
+  const alerts = [];
+  for (const p of S.providers) if (p.quota?.balance && Number(p.quota.balance.total) < 0) alerts.push(['crit', `<b>${t('{v1} 余额为负（¥{v2}）', { v1: esc(p.name), v2: p.quota.balance.total })}</b>${t('，经它的请求会失败，备用渠道会接力。')}`, `<a class="alink" href="#gateway-catalog">${t('查看调用链')}</a>`]);
+  if (rate < 0.95) alerts.push(['warn', `<b>${t('今日成功率 {v1}', { v1: fmtPct(rate) })}</b>${t('：{v1} 次请求失败。', { v1: fmtInt(totals.failed) })}`, `<a class="alink" href="#logs-requests">${t('查看失败请求')}</a>`]);
+  if (pending) alerts.push(['info', `<b>${t('{v1} 条模型建议', { v1: pending })}</b>${t('待处理。')}`, `<a class="alink" href="#gateway-suggestions">${t('去处理')}</a>`]);
+  const subs = S.providers.filter((p) => p.quota && (p.quota.fiveHour || p.quota.weekly));
+  const bals = S.providers.filter((p) => p.quota?.balance);
+  const fallbacks = S.fallbacksToday ?? S.events.filter((e) => /fallback|demoted/.test(e.type)).length;
+  const served = S.dayClient.filter((r) => r.day === TODAY && r.kind === 'served').reduce((a, r) => a + r.tokens, 0);
+  return head(t('概览'), t('现在是否正常、额度还剩多少')) + `<div class="view">
+    ${alerts.length ? `<div class="alerts">${alerts.map(([lv, msg, act]) => `<div class="alert ${lv}">${I[lv]}<div>${msg}</div><span class="act">${act}</span></div>`).join('')}</div>` : ''}
+    <section aria-label="${t('订阅额度')}"><div class="card-h" style="margin:4px 0 10px"><h2>${t('订阅额度')}</h2></div>
+      <div class="grid-4">${subs.map(quotaCard).join('')}</div></section>
+    <section class="grid-2" aria-label="${t('余额与网关')}">
+      ${bals.map(quotaCard).join('')}
+    </section>
+    <section class="card" aria-label="${t('今日网关')}"><div class="card-h"><h2>${t('今日网关')}</h2><a href="#logs-requests" class="alink">${t('请求日志 ›')}</a></div>
+      <div class="health">
+        <div><div class="tile-k muted" style="font-size:12px">${t('请求')}</div><div class="num" style="font-size:20px;font-weight:650"${rollAttr('ov.req', totals.requests, 'int', R_ENTERING)}>${fmtInt(totals.requests)}</div></div>
+        <div><div class="muted" style="font-size:12px">${t('成功率')}</div><div class="num" style="font-size:20px;font-weight:650"${rollAttr('ov.ok', rate * 100, 'pct1', R_ENTERING)}>${fmtPct(rate)} ${rate < 0.95 ? `<span class="chip warn">${t('{v1}低于 95%', { v1: I.warn })}</span>` : ''}</div></div>
+        <div><div class="muted" style="font-size:12px">${t('接力切换')}</div><div class="num" style="font-size:20px;font-weight:650"${rollAttr('ov.fb', fallbacks, 'int', R_ENTERING)}>${fallbacks}</div></div>
+        <div><div class="muted" style="font-size:12px">${t('今日 Tokens')}</div><div class="num" style="font-size:20px;font-weight:650"${rollAttr('ov.tok', served, 'tok', R_ENTERING)}>${fmtTok(served)}</div></div>
+        <div><div class="muted" style="font-size:12px">${t('今日成本')}</div><div class="num" style="font-size:20px;font-weight:650"${rollAttr('ov.cost', totals.cost, 'usd2', R_ENTERING)}>${fmtUsd(totals.cost)}</div></div>
+      </div></section>
+    ${topologyHtml()}
+
+  </div>`;
+}
+function animateMeters(first) {
+  document.querySelectorAll('[data-meter]').forEach((el) => {
+    const id = el.dataset.meter, to = Number(el.dataset.to), from = first ? 0 : (meterPrev.get(id) ?? to);
+    el.style.transition = 'none'; el.style.transform = `scaleX(${from / 100})`;
+    el.getBoundingClientRect();
+    el.style.transition = ''; requestAnimationFrame(() => { el.style.transform = `scaleX(${to / 100})`; });
+    const num = document.querySelector(`[data-count="${CSS.escape(id)}"]`);
+    if (num && !reduced) { const t0 = performance.now(); const step = (t) => { const k = Math.min(1, (t - t0) / 900), e = 1 - Math.pow(1 - k, 3); num.textContent = Math.round(from + (to - from) * e) + '%'; if (k < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+    meterPrev.set(id, to);
+  });
+  store.set('meters', [...meterPrev]);
+}
+async function simulateRefresh(silent = false, force = null) {
+  try {
+    await loadConsoleData(force);
+    applyData();
+    // 渠道视图由 loadU 内部渲染：若这里再 render() 会双重渲染，第二次 rollAttr
+    // 看到 rollPrev 已是新值 → 不输出 data-roll → 把刚启动的数字滚动换成静态文本。
+    if (currentView() === 'usage-channels' && !U.loading) await loadU();
+    else render();
+    markLive();
+  }
+  catch (e) { console.error(e); return; }
+}
+/* 单渠道探测：与老页刷新按钮同反馈 —— loading 旋转 ≥350ms → 成功打勾 / 失败打叉 1.4s；render() 会换掉按钮，paint 每次重查当前节点 */
+function probeClick(btn) {
+  const id = btn.dataset.probe, start = Date.now();
+  const paint = (st) => { const el = document.querySelector(`[data-probe="${CSS.escape(id)}"]`) || btn; if (!el?.isConnected) return; el.classList.remove('is-loading', 'is-success', 'is-error'); if (st !== 'idle') el.classList.add(`is-${st}`); el.innerHTML = st === 'loading' || st === 'idle' ? SVG_RF : FB_ICON[st] || SVG_RF; el.setAttribute('aria-busy', String(st === 'loading')); el.disabled = st === 'loading'; };
+  paint('loading');
+  simulateRefresh(true, id).then(() => {
+    const failed = S.providers.find((x) => x.id === id)?.probe?.lastError;
+    setTimeout(() => { paint(failed ? 'error' : 'success'); setTimeout(() => paint('idle'), 1400); }, Math.max(0, 350 - (Date.now() - start)));
+  });
+}
+function markLive() {
+  const tag = document.querySelector('#live-tag');
+  if (!tag) return;
+  const d = new Date(S.generatedAt);
+  tag.textContent = t('实时 · {v1}:{v2}', { v1: pad(d.getHours()), v2: pad(d.getMinutes()) });
+}
+/* 自动刷新：与老页同口径 —— 概览 60s / 用量 30s，按当前视图动态切换；可暂停；切走暂停，回来立即补拉 */
+let autoTimer = null, autoEnabled = true;
+const refreshInterval = () => (currentView().startsWith('usage') ? 30 : 60) * 1000;
+function updateAutoBtn() { const b = document.querySelector('#auto-btn'); if (!b) return; b.setAttribute('aria-pressed', String(autoEnabled)); b.classList.toggle('on', autoEnabled); b.textContent = autoEnabled ? t('自动 {v1} 秒', { v1: refreshInterval() / 1000 }) : t('已暂停'); }
+function startAutoRefresh() {
+  if (autoTimer) clearInterval(autoTimer);
+  autoTimer = setInterval(() => { if (autoEnabled && !document.hidden) simulateRefresh(true); }, refreshInterval());
+  updateAutoBtn();
+}
+
+/* ── 用量 · 总览 ── */
+function heatStats(m) {
+  const days = [...m.entries()].filter(([, v]) => v.tokens > 0).map(([d]) => d).sort();
+  const set = new Set(days);
+  let longest = 0, run = 0, prev = null;
+  for (const d of days) { run = prev && addDays(prev, 1) === d ? run + 1 : 1; longest = Math.max(longest, run); prev = d; }
+  let cur = 0, c = set.has(TODAY) ? TODAY : addDays(TODAY, -1); while (set.has(c)) { cur++; c = addDays(c, -1); }
+  let peak = null; for (const [d, v] of m) if (!peak || v.tokens > peak.tokens) peak = { day: d, tokens: v.tokens };
+  return { active: days.length, longest, cur, peak };
+}
+function kindSeg() { return seg('kind', [['all', t('全部')], ['served', t('经网关')], ['observed', t('订阅直连')]], state.kind); }
+// 展示条数：与线上一致 —— 请求近 50/100/200（默认 50）、事件近 10/30/50（默认 30），选择持久化；白名单外回退默认
+const LIMITS = { logLimit: [50, 100, 200], evLimit: [10, 30, 50] };
+const LIMIT_DEF = { logLimit: 50, evLimit: 30 };
+for (const k of Object.keys(LIMITS)) if (!LIMITS[k].includes(state[k])) state[k] = LIMIT_DEF[k];
+function limitSel(key) {
+  return `<select data-limit="${key}" aria-label="${t('展示条数')}">${LIMITS[key].map((n) => `<option value="${n}" ${state[key] === n ? 'selected' : ''}>${t('近 {v1} 条', { v1: n })}</option>`).join('')}</select>`;
+}
+function viewUsageSummary() {
+  if (!S) return subTabs('usage-summary', kindSeg()) + `<div class="view">
+    <div class="tiles">${skTile().repeat(5)}</div>
+    ${skCard('Activity', `<div class="skel" style="height:140px;border-radius:8px"></div>`)}
+    <div class="grid-2">${skCard(t('来源占比'), skRows(6))}${skCard(t('模型占比'), skRows(6))}</div></div>`;
+  const m = dailyTotals(S.dayClient);
+  const st = heatStats(m);
+  let tok = 0, cost = 0; for (const v of m.values()) { tok += v.tokens; cost += v.cost; }
+  const topModel = aggregate(modelRows(), 'model', 'all')[0];
+  const src = aggregate(S.dayClient, 'client', 'all').slice(0, 6);
+  const mod = aggregate(modelRows(), 'model', 'all').slice(0, 6);
+  const shareList = (rows, color, label) => { const total = rows.reduce((a, r) => a + r.tokens, 0) || 1; return `<div class="mini-list">${rows.map((r) => `<div class="sharerow" title="${esc(label(r.key))}"><span class="sr-name">${esc(label(r.key))}</span><div class="share-track"><div class="share-fill" style="width:${(r.tokens / rows[0].tokens) * 100}%;background:${color(r.key)}"></div></div><span class="num">${fmtTok(r.tokens)}</span><span class="p num">${fmtPct(r.tokens / total)}</span></div>`).join('')}</div>`; };
+  return subTabs('usage-summary', kindSeg()) + `<div class="view">
+    <div class="tiles">
+      <div class="tile"><div class="k">${t('Token 总量')}</div><div class="v num"${rollAttr('sum.tokens', tok, 'tok')}>${fmtTok(tok)}</div></div>
+      <div class="tile"><div class="k">${t('总成本')}</div><div class="v num"${rollAttr('sum.cost', cost, 'usd')}>${fmtUsd(cost)}</div></div>
+      <div class="tile"><div class="k">${t('活跃天数')}</div><div class="v num">${t('{v1} 天', { v1: st.active })}</div></div>
+      <div class="tile"><div class="k">${t('单日峰值')}</div><div class="v num">${st.peak ? fmtTok(st.peak.tokens) : '—'} <span class="tile-sub num">${st.peak ? shortDay(st.peak.day) : ''}</span></div></div>
+      <div class="tile"><div class="k">${t('常用模型')}</div><div class="v num" style="font-family:var(--mono)">${esc(topModel ? modelLabel(topModel.key) : '—')}</div></div>
+    </div>
+    <section class="card"><div class="card-h"><h2>Activity</h2><span class="meta">${t('近一年 · 悬停看当天')}</span></div><div class="heat-scroll" id="heat-scroll"><div class="chart heat" id="heat"></div></div></section>
+    <div class="grid-2">
+      <section class="card"><div class="card-h"><h2>${t('来源占比')}</h2><a class="meta" href="#usage-sources" data-sync-period="srcPeriod:all">${t('全部来源 ›')}</a></div>${shareList(src, srcColor, srcLabel)}</section>
+      <section class="card"><div class="card-h"><h2>${t('模型占比')}</h2><a class="meta" href="#usage-models" data-sync-period="modelPeriod:all">${t('全部模型 ›')}</a></div>${shareList(mod, modelColor, modelLabel)}</section>
+    </div>
+
+  </div>`;
+}
+function drawHeat(animate = true) {
+  const host = $('#heat'); if (!host) return;
+  const m = dailyTotals(S.dayClient);
+  // 默认铺一年窗口，对齐周一；没有记录的格子留空
+  const start = (() => { const d = parseDay(addDays(TODAY, -364)); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return dayKey(d); })();
+  const cells = []; let col = 0, row = 0, d = start;
+  while (d <= TODAY) { row = (parseDay(d).getDay() + 6) % 7; cells.push({ d, col, row, v: m.get(d) }); if (row === 6) col++; d = addDays(d, 1); }
+  const cols = col + 1;
+  const vals = cells.map((c) => c.v?.tokens ?? 0).filter((v) => v > 0).sort((a, b) => a - b);
+  const q = (p) => vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] ?? 0;
+  const cuts = [q(0.2), q(0.45), q(0.7), q(0.9)];
+  const lvl = (v) => !v ? 0 : v <= cuts[0] ? 1 : v <= cuts[1] ? 2 : v <= cuts[2] ? 3 : v <= cuts[3] ? 4 : 5;
+  const W = host.parentElement.clientWidth, labelW = 26, top = 18, gap = 3;
+  let cell = Math.floor((W - labelW - gap * (cols - 1)) / cols); cell = Math.max(10, Math.min(cell, 20));
+  const w = labelW + cols * (cell + gap), h = top + 7 * (cell + gap);
+  let svg = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" style="width:${w}px" role="img" aria-label="${t('近一年每日用量热力图')}">`;
+  [t('一'), '', t('三'), '', t('五'), '', t('日')].forEach((l, r) => { if (l) svg += `<text class="ax" x="0" y="${top + r * (cell + gap) + cell * 0.8}">${l}</text>`; });
+  let lastMonth = -1;
+  for (const c of cells) {
+    const dd = parseDay(c.d);
+    if (c.row === 0 && dd.getMonth() !== lastMonth && dd.getDate() <= 7) { lastMonth = dd.getMonth(); svg += `<text class="ax" x="${labelW + c.col * (cell + gap)}" y="11">${MGI18n.fmtDate(dd, 'month')}</text>`; }
+    svg += `<rect class="cell h${lvl(c.v?.tokens)}" x="${labelW + c.col * (cell + gap)}" y="${top + c.row * (cell + gap)}" width="${cell}" height="${cell}" rx="${Math.max(2, cell / 5)}" data-d="${c.d}" style="${animate && !reduced ? `animation-delay:${((c.col / cols) * 0.2).toFixed(3)}s` : 'animation:none'}"></rect>`;
+  }
+  host.innerHTML = svg + '</svg>';
+  host.onpointermove = (e) => { const r = e.target.closest('rect'); if (!r) return hideTip(); const v = m.get(r.dataset.d); showTip(e, `<div class="tt">${shortDay(r.dataset.d)}</div><div class="tr"><span>Tokens</span><b class="num">${v ? fmtTok(v.tokens) : '0'}</b></div><div class="tr"><span>${t('成本')}</span><b class="num">${v ? fmtUsd(v.cost) : '—'}</b></div>`); };
+  host.onpointerleave = hideTip;
+  const sc = $('#heat-scroll'); sc.scrollLeft = sc.scrollWidth;
+}
+
+/* ── 图表工具 ── */
+const tip = $('#tip');
+function showTip(e, html) { tip.innerHTML = html; tip.classList.add('on'); const r = tip.getBoundingClientRect(); let x = e.clientX + 14, y = e.clientY + 14; if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14; if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14; tip.style.left = x + scrollX + 'px'; tip.style.top = y + scrollY + 'px'; tip.style.position = 'absolute'; }
+function hideTip() { tip.classList.remove('on'); }
+/* 悬停统一面板：任意 [title] 首次悬停转为 data-tip（原生气泡不再出现），
+   与图表/热力图共用同一个灰色面板；data-tt 为面板加粗标题（额度卡图标说明等） */
+function tipHtml(el) { return `${el.dataset.tt ? `<div class="tt">${esc(el.dataset.tt)}</div>` : ''}${esc(el.dataset.tip)}`; }
+document.addEventListener('pointerover', (e) => {
+  const titled = e.target.closest('[title]');
+  if (titled) { titled.dataset.tip = titled.getAttribute('title'); titled.removeAttribute('title'); }
+  const t = e.target.closest('[data-tip]');
+  if (t && t.dataset.tip) showTip(e, tipHtml(t));
+});
+document.addEventListener('pointermove', (e) => { const t = e.target.closest('[data-tip]'); if (t && t.dataset.tip) showTip(e, tipHtml(t)); });
+document.addEventListener('pointerout', (e) => { const t = e.target.closest('[data-tip]'); if (t && !t.contains(e.relatedTarget)) hideTip(); });
+document.addEventListener('focusin', (e) => { const t = e.target.closest('[data-tt]'); if (t && t.dataset.tip) { const r = t.getBoundingClientRect(); showTip({ clientX: r.left, clientY: r.bottom + 6 }, tipHtml(t)); } });
+// 触屏：pointerover/move 不触发，点按帮助标记（.mark）用同一个灰色面板展示；点其他处收起
+document.addEventListener('touchstart', (e) => {
+  const t = e.target.closest('[data-tip]');
+  if (t && t.dataset.tip) { const p = e.touches[0]; showTip({ clientX: p.clientX, clientY: p.clientY }, tipHtml(t)); }
+  else hideTip();
+}, { passive: true });
+document.addEventListener('focusout', () => hideTip());
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+/* 平滑曲线：Catmull-Rom 插值转三次贝塞尔（端点直按切线外推），点少于 3 个退回折线 */
+function smoothPath(pts) {
+  if (pts.length < 3) return pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join('');
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] ?? pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] ?? p2;
+    d += `C${p1[0] + (p2[0] - p0[0]) / 6},${p1[1] + (p2[1] - p0[1]) / 6} ${p2[0] - (p3[0] - p1[0]) / 6},${p2[1] - (p3[1] - p1[1]) / 6} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+function frame(host, { days, max, height = 220, fmt, unitLabel }) {
+  const W = Math.max(300, host.clientWidth), padL = 52, padR = 10, padT = 10, padB = 24, H = height;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const x = (i) => padL + (days.length === 1 ? iw / 2 : (i * iw) / (days.length - 1));
+  const y = (v) => padT + ih - (v / max) * ih;
+  let g = '';
+  for (let k = 0; k <= 4; k++) { const v = (max * k) / 4, yy = y(v); g += `<line class="${k ? 'gl' : 'bl'}" x1="${padL}" x2="${W - padR}" y1="${yy}" y2="${yy}"/><text class="ax" x="${padL - 8}" y="${yy + 4}" text-anchor="end">${fmt(v)}</text>`; }
+  const every = Math.max(1, Math.ceil(days.length / Math.floor(iw / 64)));
+  // 末尾刻度总是绘制，但与前一刻度距离小于标签宽度时跳过，避免窄屏重叠（“2026/10/2X”撞上末天）
+  const step = days.length > 1 ? iw / (days.length - 1) : iw;
+  const lastTickGap = (days.length - 1 - Math.floor((days.length - 1) / every) * every) * step;
+  days.forEach((d, i) => { const isLast = i === days.length - 1; if (i % every === 0 || (isLast && lastTickGap >= 62)) g += `<text class="ax" x="${x(i)}" y="${H - 6}" text-anchor="middle">${shortDay(d)}</text>`; });
+  return { W, H, x, y, padL, padR, padT, ih, iw, grid: g, unitLabel };
+}
+function hover(host, f, days, rows) {
+  const svg = host.querySelector('svg');
+  const rule = svg.querySelector('.hover-rule');
+  host.onpointermove = (e) => {
+    const box = svg.getBoundingClientRect(); const px = ((e.clientX - box.left) / box.width) * f.W;
+    if (px < f.padL - 6 || px > f.W - f.padR + 6) { rule.style.opacity = 0; return hideTip(); }
+    const i = Math.max(0, Math.min(days.length - 1, Math.round(((px - f.padL) / f.iw) * (days.length - 1))));
+    rule.setAttribute('x1', f.x(i)); rule.setAttribute('x2', f.x(i)); rule.style.opacity = 1;
+    showTip(e, `<div class="tt">${shortDay(days[i])}</div>` + rows(i).map(([c, l, v]) => `<div class="tr"><span>${c ? `<span class="dot" style="background:${c};width:8px;height:8px;margin-right:6px"></span>` : ''}${esc(l)}</span><b class="num">${v}</b></div>`).join(''));
+  };
+  host.onpointerleave = () => { rule.style.opacity = 0; hideTip(); };
+}
+const RULE = (f) => `<line class="hover-rule" x1="0" x2="0" y1="${f.padT}" y2="${f.padT + f.ih}" stroke="var(--ink-2)" stroke-dasharray="3 3" style="opacity:0"/>`;
+
+/* ── 用量 · 趋势 ── */
+function viewUsageTrends() {
+  if (!S) return subTabs('usage-trends') + `<div class="view"><div class="grid-2">${skChartCard(240)}${skChartCard(240)}</div></div>`;
+  const views = [['total', t('总量')], ['compare', t('来源对比')], ['mix', t('构成')]];
+  const right = `<div class="controls">${seg('trendRange', [[7, t('7 天')], [30, t('30 天')], [90, t('90 天')], [365, t('1 年')]], state.trendRange)}${seg('trendView', views, state.trendView)}${state.trendView === 'mix' ? seg('trendGroup', [['client', t('按来源')], ['model', t('按模型')]], state.trendGroup) : ''}</div>`;
+  const body = state.trendView === 'total'
+    ? `<section class="card"><div class="card-h"><h2>Tokens</h2><div class="legend">${KINDS.map(([k, l, c]) => `<button class="it" type="button" data-hide="k:${k}" aria-pressed="${!hidden.has('k:' + k)}"><span class="dot" style="background:${c}"></span>${l}</button>`).join('')}</div></div><div class="chart" id="ch-tok"></div>
+       <div class="chart-sub">${t('成本（美元）')}</div><div class="chart" id="ch-cost"></div></section>`
+    : state.trendView === 'compare'
+      ? `<section class="card"><div class="card-h"><h2>Agent</h2><div class="legend" id="lg-a"></div></div><div class="chart" id="ch-a"></div></section><section class="card"><div class="card-h"><h2>${t('业务应用与订阅直连')}</h2><div class="legend" id="lg-b"></div></div><div class="chart" id="ch-b"></div></section>`
+      : `<section class="card"><div class="card-h"><h2>${state.trendGroup === 'client' ? t('按来源堆叠') : t('按模型堆叠')}</h2><div class="legend" id="lg-mix"></div></div><div class="chart" id="ch-mix"></div></section>`;
+  return subTabs('usage-trends', kindSeg()) + `<div class="view"><div class="controls">${right}</div>${body}
+    </div>`;
+}
+const hidden = new Set(store.get('hidden', []));
+function drawTrends() {
+  const days = daysBack(state.trendRange);
+  if (state.trendView === 'total') {
+    const by = new Map(days.map((d) => [d, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }]));
+    for (const r of S.dayClient) if (kindOk(r) && by.has(r.day)) { const a = by.get(r.day); for (const [k] of KINDS) a[k] += r.usage[k]; a.cost += r.cost; }
+    const vals = days.map((d) => by.get(d));
+    const kinds = KINDS.filter(([k]) => !hidden.has('k:' + k));
+    const hostT = $('#ch-tok'), hostC = $('#ch-cost');
+    // 和来源对比同款：每个类型一条独立折线 + 同色渐变填充，互不堆叠遮挡；量大的先画、小线后画在上层
+    const order = [...kinds].sort((a, b) => days.reduce((s, d, i) => s + vals[i][b[0]] - vals[i][a[0]], 0));
+    const tmax = niceMax(Math.max(1, ...vals.map((v) => Math.max(1, ...kinds.map(([k]) => v[k] || 0)))));
+    const f = frame(hostT, { days, max: tmax, fmt: fmtTok });
+    const defs = order.map(([k, , c], i) => `<linearGradient id="g-tok-${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".45"/><stop offset="1" stop-color="${c}" stop-opacity=".04"/></linearGradient>`).join('');
+    const paths = order.map(([k, , c], i) => { const line = vals.map((v, j) => `${j ? 'L' : 'M'}${f.x(j)},${f.y(v[k])}`).join(''); const area = line + `L${f.x(days.length - 1)},${f.y(0)}L${f.x(0)},${f.y(0)}Z`; return `<path d="${area}" fill="url(#g-tok-${i})"/><path d="${line}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/>`; }).join('');
+    hostT.innerHTML = `<svg viewBox="0 0 ${f.W} ${f.H}"><defs>${defs}</defs>${f.grid}${paths}${RULE(f)}</svg>`;
+    hover(hostT, f, days, (i) => [...kinds.map(([k, l, c]) => [c, l, fmtTok(vals[i][k])]).sort((a, b) => 0), ['', t('合计'), fmtTok(kinds.reduce((a, [k]) => a + vals[i][k], 0))]]);
+    const cmax = niceMax(Math.max(...vals.map((v) => v.cost)));
+    const g = frame(hostC, { days, max: cmax, height: 130, fmt: (v) => '$' + (v >= 10 ? v.toFixed(0) : v.toFixed(1)) });
+    // 成本线：平滑曲线（Catmull-Rom → 三次贝塞尔），与上方 token 折线形成软硬对比
+    const cpts = vals.map((v, i) => [g.x(i), g.y(v.cost)]);
+    const line = smoothPath(cpts);
+    hostC.innerHTML = `<svg viewBox="0 0 ${g.W} ${g.H}">${g.grid}<path d="${line}L${g.x(days.length - 1)},${g.y(0)}L${g.x(0)},${g.y(0)}Z" fill="var(--c7)" fill-opacity=".10"/><path d="${line}" fill="none" stroke="var(--c7)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${RULE(g)}</svg>`;
+    hover(hostC, g, days, (i) => [['var(--c7)', t('成本'), fmtUsd(vals[i].cost)]]);
+  } else if (state.trendView === 'compare') {
+    const isAgent = isAgentClient;
+    // client 为空的历史行（映射前）归入「未归因」继续参与统计，不丢弃
+    const all = aggregate(S.dayClient, 'client', state.trendRange)
+      .map((r) => (r.key == null ? { ...r, key: UNATTR } : r))
+      .filter((r) => r.key !== 'shared' && r.key !== 'probe');
+    for (const [pane, list] of [['a', all.filter((r) => isAgent(r.key))], ['b', all.filter((r) => !isAgent(r.key))]]) {
+      const host = $('#ch-' + pane), lg = $('#lg-' + pane);
+      lg.innerHTML = list.map((r) => `<button class="it" type="button" data-hide="${esc(r.key)}" aria-pressed="${!hidden.has(r.key)}"><span class="dot" style="background:${srcColor(r.key)}"></span>${esc(srcLabel(r.key))} <span class="muted num">${fmtTok(r.tokens)}</span></button>`).join('') || `<span class="muted">${t('这个时间段没有数据')}</span>`;
+      const vis = list.filter((r) => !hidden.has(r.key));
+      const series = vis.map((r) => { const src = r.key === UNATTR ? null : r.key; return { key: r.key, src, v: days.map((d) => S.dayClient.filter((x) => x.day === d && x.client === src && kindOk(x)).reduce((a, x) => a + x.tokens, 0)) }; });
+      const max = niceMax(Math.max(1, ...series.flatMap((s) => s.v)));
+      const f = frame(host, { days, max, height: 200, fmt: fmtTok });
+      const defs = series.map((s, i) => { const c = srcColor(s.key); return `<linearGradient id="g-${pane}-${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".45"/><stop offset="1" stop-color="${c}" stop-opacity=".04"/></linearGradient>`; }).join('');
+      host.innerHTML = `<svg viewBox="0 0 ${f.W} ${f.H}"><defs>${defs}</defs>${f.grid}${series.map((s, i) => { const line = s.v.map((v, j) => `${j ? 'L' : 'M'}${f.x(j)},${f.y(v)}`).join(''); const area = line + `L${f.x(days.length - 1)},${f.y(0)}L${f.x(0)},${f.y(0)}Z`; return `<path d="${area}" fill="url(#g-${pane}-${i})"/><path d="${line}" fill="none" stroke="${srcColor(s.key)}" stroke-width="2" stroke-linejoin="round"/>`; }).join('')}${RULE(f)}</svg>`;
+      hover(host, f, days, (i) => series.map((s) => [srcColor(s.key), srcLabel(s.key), fmtTok(s.v[i])]).sort((a, b) => 0));
+    }
+  } else {
+    const byClient = state.trendGroup === 'client';
+    const rows = byClient ? S.dayClient : modelRows();
+    const key = byClient ? 'client' : 'model', color = byClient ? srcColor : modelColor, label = byClient ? srcLabel : modelLabel;
+    const top = aggregate(rows, key, state.trendRange).filter((r) => r.key !== '__other').slice(0, 7).map((r) => r.key); // '__other' 来源自身不入 top：永远落到溢出桶，避免出现两个「其他」
+    const allKeys = [...top, '__other'];
+    const keys = allKeys.filter((k) => !hidden.has('m:' + k));
+    const by = new Map(days.map((d) => [d, Object.fromEntries(keys.map((k) => [k, 0]))]));
+    for (const r of rows) if (kindOk(r) && by.has(r.day)) { const k = top.includes(r[key] ?? null) ? r[key] ?? null : '__other'; const a = by.get(r.day); if (!(k in a)) continue; a[k] += r.tokens; }
+    const host = $('#ch-mix');
+    const max = niceMax(Math.max(...days.map((d) => keys.reduce((a, k) => a + by.get(d)[k], 0))));
+    const f = frame(host, { days, max, height: 260, fmt: fmtTok });
+    const bw = Math.max(2, Math.min(22, (f.iw / days.length) * 0.7));
+    let bars = '';
+    days.forEach((d, i) => { let acc = 0; for (const k of keys) { const v = by.get(d)[k]; if (!v) continue; const y1 = f.y(acc + v), y0 = f.y(acc); bars += `<rect x="${f.x(i) - bw / 2}" y="${y1}" width="${bw}" height="${Math.max(0, y0 - y1 - (y0 - y1 > 3 ? 1.5 : 0))}" fill="${k === '__other' ? 'var(--c-other)' : color(k)}" rx="${k === keys.filter((kk) => by.get(d)[kk]).at(-1) ? 2 : 0}"/>`; acc += v; } });
+    host.innerHTML = `<svg viewBox="0 0 ${f.W} ${f.H}">${f.grid}${bars}${RULE(f)}</svg>`;
+    $('#lg-mix').innerHTML = allKeys.map((k) => `<button class="it" type="button" data-hide="m:${esc(k)}" aria-pressed="${!hidden.has('m:' + k)}"><span class="dot" style="background:${k === '__other' ? 'var(--c-other)' : color(k)}"></span>${esc(k === '__other' ? t('其他') : label(k))}</button>`).join('');
+    hover(host, f, days, (i) => keys.filter((k) => by.get(days[i])[k]).reverse().map((k) => [k === '__other' ? 'var(--c-other)' : color(k), k === '__other' ? t('其他') : label(k), fmtTok(by.get(days[i])[k])]));
+  }
+}
+
+/* ── 用量 · 来源 / 模型 ── */
+const openRows = new Set();
+function sparkline(vals, color = 'var(--meter)', W = 260) {
+  const H = Math.max(44, Math.round(W * 0.155)), max = Math.max(1, ...vals);
+  const pts = vals.map((v, i) => `${(i * W) / Math.max(1, vals.length - 1)},${H - 4 - (v / max) * (H - 8)}`);
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto"><path d="M${pts.join('L')}L${W},${H}L0,${H}Z" fill="${color}" fill-opacity=".12"/><path d="M${pts.join('L')}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/><circle cx="${pts.at(-1).split(',')[0]}" cy="${pts.at(-1).split(',')[1]}" r="3" fill="${color}"/></svg>`;
+}
+function mixBar(u) { const totals = KINDS.reduce((a, [k]) => a + u[k], 0) || 1; return `<div class="mix" role="img" aria-label="${t('Tokens 构成')}">${KINDS.map(([k, l, c]) => u[k] ? `<span style="width:${(u[k] / totals) * 100}%;background:${c}" title="${l} ${fmtTok(u[k])}"></span>` : '').join('')}</div><div class="legend" style="margin-top:6px">${KINDS.map(([k, l, c]) => `<span class="it"><span class="dot" style="background:${c}"></span>${l} ${fmtPct(u[k] / totals)}</span>`).join('')}</div>`; }
+/* 展开行内容：渲染与点击展开共用；局部更新时只重建这一段，其余行不动 */
+function breakdownDetail(r, isSrc, period, color) {
+  const pairKey = isSrc ? 'client' : 'model', otherKey = isSrc ? 'model' : 'client';
+  const pairs = new Map();
+  for (const x of S.clientModel) if ((x[pairKey] ?? null) === r.key && inPeriod(x.day, period === 'all' ? 90 : Math.min(90, period))) pairs.set(x[otherKey] ?? null, (pairs.get(x[otherKey] ?? null) ?? 0) + x.tokens);
+  const plist = [...pairs.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const days = daysBack(30);
+  const spark = days.map((d) => (isSrc ? S.dayClient : S.dayModel).filter((x) => x.day === d && (x[pairKey] ?? null) === r.key && (isSrc ? kindOk(x) : true)).reduce((a, x) => a + x.tokens, 0));
+  return `<tr class="detail"><td colspan="6"><div class="detail-grid"><div class="dsplit">
+    <div class="dcol"><div><h3>${t('Tokens 构成')}</h3>${mixBar(r.usage)}</div>
+    <div><h3>${t('近 30 天')}</h3>${sparkline(spark, color(r.key), 460)}</div></div>
+    <div class="dcol"><h3>${t('{v1}（近 {v2} 天）', { v1: isSrc ? t('用到的模型') : t('使用它的来源'), v2: period === 'all' ? 90 : Math.min(90, period) })}</h3><div class="mini-list">${plist.map(([k, v]) => `<div class="li"><div class="name"><span class="dot" style="background:${isSrc ? modelColor(k) : srcColor(k)}"></span><span class="t">${esc(isSrc ? k : srcLabel(k))}</span></div><span class="num muted">${fmtTok(v)}</span></div>`).join('') || '<span class="muted">—</span>'}</div></div>
+  </div></div></td></tr>`;
+}
+/* 点行展开/折叠：只增删这一行的 detail 与自身状态，其余行不重渲染（占比条/数据保持原样，不重播入场动效） */
+function toggleBreakdownRow(row) {
+  const id = row.dataset.row;
+  const nowOpen = !openRows.has(id);
+  nowOpen ? openRows.add(id) : openRows.delete(id);
+  const cur = row.nextElementSibling;
+  if (cur && cur.classList.contains('detail')) cur.remove();
+  row.classList.toggle('open', nowOpen);
+  row.setAttribute('aria-expanded', String(nowOpen));
+  if (!nowOpen) return;
+  const isSrc = id.startsWith('sources:');
+  const period = isSrc ? state.srcPeriod : state.modelPeriod;
+  let rows = aggregate(isSrc ? S.dayClient : modelRows(), isSrc ? 'client' : 'model', period);
+  if (isSrc && state.srcGroup) rows = rows.filter((r) => state.srcGroup === 'agent' ? isAgentClient(r.key) : !isAgentClient(r.key));
+  const key = row.dataset.key || null;
+  const r = rows.find((x) => (x.key ?? null) === key);
+  if (r) row.insertAdjacentHTML('afterend', breakdownDetail(r, isSrc, period, isSrc ? srcColor : modelColor));
+}
+function viewBreakdown(kindOfView) {
+  const isSrc = kindOfView === 'sources';
+  if (!S) return subTabs(isSrc ? 'usage-sources' : 'usage-models', kindSeg()) + `<div class="view">${skTableCard(isSrc ? t('来源用量') : t('模型用量'), 10)}</div>`;
+  const period = isSrc ? state.srcPeriod : state.modelPeriod;
+  const focus = isSrc ? hashParam() : '';
+  let rows = aggregate(isSrc ? S.dayClient : modelRows(), isSrc ? 'client' : 'model', period);
+  if (isSrc && state.srcGroup) rows = rows.filter((r) => state.srcGroup === 'agent' ? isAgentClient(r.key) : !isAgentClient(r.key));
+  const total = rows.reduce((a, r) => a + r.tokens, 0) || 1;
+  const color = isSrc ? srcColor : modelColor, label = isSrc ? srcLabel : modelLabel;
+  const unknown = rows.some((r) => r.costUnknown);
+  const body = rows.map((r) => {
+    const id = kindOfView + ':' + (r.key ?? '');
+    const hl = focus !== '' && (r.key ?? '') === focus;
+    const open = openRows.has(id) || hl;
+    if (hl) openRows.add(id);
+    const kinds = [...r.kinds].filter((k) => k !== 'all');
+    const kindChips = isSrc ? kinds.map((k) => `<span class="chip ${k === 'served' ? 'info' : 'ghost'}">${KIND_LABEL[k]}</span>`).join(' ') : '';
+    const agent = isSrc && AGENTS[r.key] ? `<span class="chip ghost">${AGENTS[r.key].location === 'local' ? t('本地') : t('云端')}</span>` : '';
+    let detail = '';
+    if (open) detail = breakdownDetail(r, isSrc, period, color);
+    const lead = isSrc && AGENTS[r.key] ? agentIcon(r.key) : `<span class="dot" style="background:${color(r.key)}"></span>`;
+    return `<tr class="row ${open ? 'open' : ''}${hl ? ' hl' : ''}" data-row="${esc(id)}" data-key="${esc(String(r.key ?? ''))}" tabindex="0" aria-expanded="${open}">
+      <td><div class="name">${I.caret}${lead}<span class="t">${esc(label(r.key))}</span> ${agent}</div></td>
+      ${isSrc ? `<td>${kindChips}</td>` : ''}
+      <td class="r num">${fmtTok(r.tokens)}</td><td class="r num">${fmtUsd(r.cost)}${r.costUnknown ? '<span class="muted">*</span>' : ''}</td>
+      <td class="r num" title="${r.records > r.requests ? t('含订阅直连用量（无请求数口径），仅统计经网关请求') : ''}">${r.records > r.requests ? (r.requests ? `${fmtInt(r.requests)}<span class="muted">${t('（部分）')}</span>` : `<span class="muted">${t('未提供')}</span>`) : fmtInt(r.requests)}</td>
+      <td><div class="share"><div class="share-track"><div class="share-fill" style="width:${(r.tokens / rows[0].tokens) * 100}%"></div></div><span class="p num">${fmtPct(r.tokens / total)}</span></div></td></tr>${detail}`;
+  }).join('');
+  if (focus) requestAnimationFrame(() => document.querySelector('tr.hl')?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+  const periodSeg = seg(isSrc ? 'srcPeriod' : 'modelPeriod', [['all', t('全部')], [1, t('今天')], [7, t('7 天')], [30, t('30 天')]], period);
+  const groupSeg = isSrc ? seg('srcGroup', [['', t('全部')], ['agent', 'Agent'], ['app', t('应用')]], state.srcGroup) : '';
+  // 口径（全部/经网关/订阅直连）放右上角与 tab 同一行（与总览/趋势/渠道一致）；卡片头只留来源分组与时间档
+  return subTabs(isSrc ? 'usage-sources' : 'usage-models', kindSeg()) + `<div class="view">
+    <section class="card"><div class="card-h"><h2>${isSrc ? t('谁在用') : t('用了哪些模型')}</h2><div style="display:flex;gap:8px;flex-wrap:wrap">${groupSeg}${periodSeg}</div></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${isSrc ? t('来源') : t('模型')}</th>${isSrc ? `<th>${t('类型')}</th>` : ''}<th class="r">Tokens</th><th class="r">${t('成本')}</th><th class="r">${t('请求')}</th><th style="min-width:180px">${t('占比')}</th></tr></thead><tbody>${body || `<tr><td colspan="6" class="empty">${t('这个时间段没有用量')}</td></tr>`}</tbody></table></div>
+      ${unknown ? `<p class="muted" style="font-size:12px;margin:10px 0 0">${t('* 部分记录缺少定价，成本只含已知部分')}</p>` : ''}
+    </section>
+
+  </div>`;
+}
+
+/* ── 用量 · 渠道 ── */
+let provOfModel = new Map();
+function rebuildProvOfModel() {
+  const m = new Map();
+  for (const p of S.providers) for (const mod of p.models) { if (!m.has(mod.id)) m.set(mod.id, mod.chain?.[0]?.providerId ?? p.id); }
+  provOfModel = m;
+}
+/* ── 用量 · 渠道：复刻老 /usage 用量统计页 —— 筛选 + 汇总卡 + 用量/成本双刻度图 + 来源折线图 ── */
+const U = { data: null, loading: false, error: '', prov: '', client: '', model: '', range: '7d', hidden: new Set(), srcHidden: new Set(), agents: {}, lastFocus: null };
+let U_RANGE;
+labelUpdates.push(() => { U_RANGE = { today: t('今天'), yday: t('昨天'), '7d': t('近7天'), '30d': t('近30天') }; });
+labelUpdates.at(-1)();
+let U_SERIES;
+labelUpdates.push(() => { U_SERIES = [
+  { k: 'out', key: 'output', label: t('输出'), color: 'var(--tok-out)' },
+  { k: 'in', key: 'input', label: t('输入'), color: 'var(--tok-in)' },
+  { k: 'cc', key: 'cacheWrite', label: t('缓存创建'), color: 'var(--tok-cc)' },
+  { k: 'cr', key: 'cacheRead', label: t('缓存命中'), color: 'var(--tok-cr)' },
+]; });
+labelUpdates.at(-1)();
+const uWan = (n) => { if (MGI18n.lang === 'en') return MGI18n.fmtCompact(n); return (n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : String(Math.round(n))); };
+const uBucketLabel = (iso, unit) => { const d = new Date(iso); return unit === 'hour' ? `${pad(d.getHours())}:00` : MGI18n.fmtDate(d); };
+function uNiceCeil(v) { const p = Math.pow(10, Math.floor(Math.log10(v))); const u = v / p; return (u <= 1 ? 1 : u <= 2 ? 2 : u <= 4 ? 4 : u <= 5 ? 5 : u <= 8 ? 8 : 10) * p; }
+
+async function loadU() {
+  U.loading = true;
+  const q = new URLSearchParams({ range: U.range, logLimit: '50' });
+  if (U.prov) q.set('provider', U.prov);
+  if (U.model) q.set('model', U.model);
+  if (U.client) q.set('client', U.client);
+  if (state.kind === 'served' || state.kind === 'observed') q.set('kind', state.kind);
+  try {
+    const d = await fetchJson('/internal/usage?' + q);
+    if (d.enabled === false || !d.totals || !Array.isArray(d.buckets)) throw Object.assign(new Error(), { usageDisabled: true });
+    for (const [k, v] of Object.entries(d.modelNames ?? {})) MODEL_NAMES.set(k, v);
+    // 联动：切换 kind/渠道后，已选项可能不在新的可选集里（如订阅直连无智谱）→ 自动清空并重拉，避免空数据死等
+    const fp = d.filters?.providers ?? [], fm = d.filters?.models ?? [];
+    if (U.prov && !fp.some((x) => x.id === U.prov)) { U.prov = ''; U.data = d; U.loading = false; return loadU(); }
+    if (U.model && !fm.some((x) => (x.id ?? x) === U.model)) { U.model = ''; U.data = d; U.loading = false; return loadU(); }
+    const fcl = d.filters?.clients ?? [];
+    if (U.client && !fcl.includes(U.client)) { U.client = ''; U.data = d; U.loading = false; return loadU(); }
+    U.data = d; U.error = '';
+    U.agents = Object.fromEntries((d.agents ?? []).map((a) => [a.app, a]));
+  } catch (e) { U.error = e.usageDisabled ? 'usage-disabled' : e.message; }
+  U.loading = false;
+  if (currentView() === 'usage-channels') { render(); requestAnimationFrame(drawU); }
+}
+
+function uCostUnknown() { const t = U.data?.totals; return !!t && (t.requests > 0 || t.subscriptionRecords > 0) && !t.costKnown; }
+
+function uFiltersHtml() {
+  const f = U.data?.filters ?? { providers: [], models: [], clients: [] };
+  const opt = (list, cur, all) => `<option value="">${all}</option>` + list.map((x) => `<option value="${esc(x.id ?? x)}"${(x.id ?? x) === cur ? ' selected' : ''}>${esc(x.name ?? x)}</option>`).join('');
+  // 来源下拉分组：全部来源 → Agent（密钥页同名实体）→ 分割线 → 应用（含其他/探测/共享密钥）
+  const isAg = (c) => !!(U.agents?.[c] ?? AGENTS[c]);
+  const cOpt = (c) => `<option value="${esc(c)}"${U.client === c ? ' selected' : ''}>${esc(srcLabel(c))}</option>`;
+  const cl = f.clients ?? [];
+  const clientSel = `<select data-uf="client"><option value=""${U.client ? '' : ' selected'}>${t('全部来源')}</option>${cl.filter(isAg).map(cOpt).join('')}<hr>${[...cl.filter((c) => !isAg(c) && c !== '__other').map(cOpt), ...(cl.includes('__other') ? [cOpt('__other')] : [])].join('')}</select>`;
+  const hasFilter = U.prov || U.model || U.client;
+  return `<div class="u-filters">
+    <label>${t('渠道')}<select data-uf="prov">${opt(f.providers ?? [], U.prov, t('全部渠道'))}</select></label>
+    <label>${t('来源{v1}', { v1: clientSel })}</label>
+    <label>${t('模型')}<select data-uf="model">${opt(f.models ?? [], U.model, t('全部模型'))}</select></label>
+    ${seg('uRange', Object.entries(U_RANGE), U.range)}
+    ${hasFilter ? `<button type="button" class="probe-btn" data-ufclear="1">${t('清除筛选')}</button>` : ''}
+  </div>`;
+}
+
+function uHeroHtml(totals) {
+  const total = totals.tokens ?? 0;
+  const judged = totals.requests - (totals.clientAborts ?? 0);
+  const okRate = judged ? (totals.ok / judged) * 100 : null;
+  const hitBase = totals.cacheRead + totals.input;
+  const tile = (label, value, { sub = '', cls = '', roll = '' } = {}) => `<div class="u-tile ${cls}"><span class="u-label">${label}</span><span class="u-big num"${roll}>${value}</span>${sub ? `<span class="u-sub">${sub}</span>` : ''}</div>`;
+  // 订阅直连窗口：官方订阅不提供请求数，仅在选中该口径时给问号解释；全部/经网关正常展示
+  const reqHelp = state.kind === 'observed' ? `<span class="mark" tabindex="0" aria-label="${t('订阅直连无请求数说明')}" data-tt="${t('订阅直连无请求数')}" data-tip="${esc(t('订阅直连的用量是从官方订阅（Claude Code / Codex 会话）导入的，官方不提供请求数，仅记录 token 用量；请求数需经网关转发才有。'))}"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M6.2 6.1a1.9 1.9 0 1 1 2.7 1.7c-.5.3-.9.6-.9 1.1v.3"/><circle cx="8" cy="11.6" r=".25" fill="currentColor" stroke="none"/></svg></span>` : '';
+  const enter = !U.rolled; U.rolled = true; // 首次数据渲染从 0 起滚（与概览 entering 同款；骨架/筛选变化不重播）
+  return `<section class="card u-hero">
+    <div class="u-hero-grid">
+      <div class="u-primary">
+        <span class="u-label">${t('累计处理 Tokens')}</span>
+        <span class="u-xl num"${rollAttr('u.tokens', total, 'int', enter)}>${fmtInt(total)}</span>
+        <span class="u-sub"${rollAttr('u.tokSub', total, 'tok', enter)}>≈ ${fmtTok(total)}</span>
+      </div>
+      <div class="u-primary cost">
+        <span class="u-label">${t('总成本')}</span>
+        <span class="u-xl num"${uCostUnknown() ? '' : rollAttr('u.cost', totals.cost ?? 0, 'usd2', enter)}>${uCostUnknown() ? '—' : '$' + (totals.cost ?? 0).toFixed(2)}</span>
+      </div>
+      <div class="u-mini-grid">
+        <div class="u-mini"><span class="u-label">${t('总请求数{v1}', { v1: reqHelp })}</span><span class="u-mid num"${totals.requests ? rollAttr('u.requests', totals.requests, 'int') : ''}>${totals.requests ? fmtInt(totals.requests) : '—'}</span></div>
+        <div class="u-mini"><span class="u-label">${t('客户端中断')}</span><span class="u-mid num"${totals.clientAborts != null && !(totals.subscriptionRecords && !totals.requests) ? rollAttr('u.aborts', totals.clientAborts ?? 0, 'int') : ''}>${totals.subscriptionRecords && !totals.requests ? '—' : fmtInt(totals.clientAborts ?? 0)}</span></div>
+        <div class="u-mini ${okRate !== null && okRate < 95 ? 'warn' : 'ok'}"><span class="u-label">${t('成功率')}</span><span class="u-mid num"${okRate !== null ? rollAttr('u.ok', okRate, 'pct1') : ''}>${okRate === null ? '—' : okRate.toFixed(1) + '%'}</span></div>
+        <div class="u-mini ok"><span class="u-label">${t('缓存命中率')}</span><span class="u-mid num"${hitBase && totals.cacheRead ? rollAttr('u.hit', (totals.cacheRead / hitBase) * 100, 'pct1') : ''}>${hitBase ? ((totals.cacheRead / hitBase) * 100).toFixed(1) + '%' : '—'}</span></div>
+      </div>
+    </div>
+    <div class="u-mix">${mixBar(totals)}</div>
+  </section>`;
+}
+
+function uLegendHtml() {
+  const totals = U.data?.totals ?? {};
+  const val = (k) => (totals[k] != null ? fmtTok(totals[k]) : '0');
+  const items = U_SERIES.map((s) => `<button type="button" data-uk="${s.k}" aria-pressed="${!U.hidden.has(s.k)}" class="${U.hidden.has(s.k) ? 'off' : ''}"><i style="background:${s.color}"></i>${s.label} <b>${val(s.key)}</b></button>`);
+  items.push(`<button type="button" data-uk="cost" aria-pressed="${!U.hidden.has('cost')}" class="${U.hidden.has('cost') || uCostUnknown() ? 'off' : ''}" ${uCostUnknown() ? 'disabled' : ''}><i style="background:var(--tok-cost)"></i>${t('成本')} <b>${uCostUnknown() ? '—' : '$' + (totals.cost ?? 0).toFixed(2)}</b></button>`);
+  return items.join('');
+}
+
+/* 双刻度堆叠面积图：左轴 Tokens（输出→输入→缓存创建→缓存命中自下而上堆叠），右轴成本虚线 */
+function drawUTrend() {
+  const svg = document.querySelector('#u-chart');
+  if (!svg || !U.data) return;
+  const buckets = U.data.buckets, unit = U.data.unit;
+  if (!buckets.length) { svg.innerHTML = ''; svg.parentElement.querySelector('.u-empty')?.remove(); svg.insertAdjacentHTML('afterend', `<p class="muted u-empty" style="font-size:12px;margin:6px 0 0">${t('这个筛选范围没有数据')}</p>`); return; }
+  const W = Math.max(240, Math.round(svg.parentElement.clientWidth || 1040)), H = W < 500 ? 280 : 210, R = 56, T = 16, B = 44;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const maxTok0 = uNiceCeil(Math.max(...buckets.map((b) => U_SERIES.reduce((s2, x) => s2 + (b[x.key] || 0), 0)), 1));
+  const L = Math.max(W < 500 ? 52 : 60, ...Array.from({ length: 5 }, (_, i) => [...uWan(maxTok0 * (1 - i / 4))].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? 10.5 : 6.5), 0) + 14));
+  const iw = W - L - R, ih = H - T - B, n = Math.max(buckets.length, 2);
+  const vis = U_SERIES.filter((s) => !U.hidden.has(s.k));
+  const maxTok = uNiceCeil(Math.max(...buckets.map((b) => vis.reduce((s2, x) => s2 + (b[x.key] || 0), 0)), 1));
+  const maxCost = uNiceCeil(Math.max(...buckets.map((b) => b.cost), 0.0001));
+  const X = (i) => L + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
+  const Yt = (v) => T + ih - (v / maxTok) * ih;
+  const Yc = (v) => T + ih - (v / maxCost) * ih;
+  let acc = buckets.map(() => 0), vacc = buckets.map(() => T + ih);
+  const layerPath = (vals) => {
+    const top = vals.map((v, i) => acc[i] + v);
+    const yTop = top.map((v, i) => (vals[i] > 0 ? Math.max(T, Math.min(Yt(v), vacc[i] - 3)) : vacc[i]));
+    const m = yTop.length;
+    const d = yTop.map((y, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${y.toFixed(1)}`).join('') +
+      yTop.map((_, ri) => { const i = m - 1 - ri; return `L${X(i).toFixed(1)},${vacc[i].toFixed(1)}`; }).join('') + 'Z';
+    acc = top; vacc = yTop;
+    return d;
+  };
+  const costPath = buckets.map((b, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Yc(b.cost).toFixed(1)}`).join('');
+  let g = '';
+  for (let i = 0; i <= 4; i++) {
+    const y = T + (ih * i) / 4, vTok = maxTok * (1 - i / 4), vCost = maxCost * (1 - i / 4);
+    g += `<line x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}" stroke="var(--hair)" stroke-width="1"/>`;
+    g += `<text x="${L - 8}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${uWan(vTok)}</text>`;
+    g += `<text x="${W - R + 8}" y="${y + 4}" font-size="11" fill="var(--muted)">${uCostUnknown() ? '—' : '$' + (vCost >= 1 ? vCost.toFixed(1) : vCost > 0 && vCost < 0.1 ? vCost.toFixed(3) : vCost.toFixed(2))}</text>`;
+  }
+  const step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 85))));
+  for (let i = 0; i < buckets.length; i += step) g += `<text x="${X(i).toFixed(1)}" y="${H - B + 18}" text-anchor="middle" font-size="11" fill="var(--muted)">${uBucketLabel(buckets[i].t, unit)}</text>`;
+  svg.innerHTML = `${g}
+    ${vis.filter((s) => buckets.some((b) => (b[s.key] || 0) > 0)).map((s, si) => { const d = layerPath(buckets.map((b) => b[s.key] || 0)); const gid = `ug-${s.k}`; return `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.color}" stop-opacity=".5"/><stop offset="1" stop-color="${s.color}" stop-opacity=".2"/></linearGradient></defs><path d="${d}" fill="url(#${gid})"/><path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.6"/>`; }).join('')}
+    ${U.hidden.has('cost') || uCostUnknown() ? '' : `<path d="${costPath}" fill="none" stroke="var(--tok-cost)" stroke-width="1.8" stroke-dasharray="6 4" stroke-linejoin="round"/>`}
+    <line class="u-rule" y1="${T}" y2="${T + ih}" stroke="var(--accent)" stroke-width="1" opacity="0"/>`;
+  const rule = svg.querySelector('.u-rule');
+  const show = (e) => {
+    const r = svg.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    if (px < L || px > W - R) return;
+    const i = Math.min(buckets.length - 1, Math.max(0, Math.round(((px - L) / iw) * (n - 1))));
+    rule.setAttribute('x1', X(i)); rule.setAttribute('x2', X(i)); rule.setAttribute('opacity', '.6');
+    const b = buckets[i];
+    const dot = (c) => `<i style="background:${c}"></i>`;
+    showTip(e, `<div class="tt">${t('{v1} · {v2} 次请求', { v1: uBucketLabel(b.t, unit), v2: b.usageOnly ? (b.requests ? fmtInt(b.requests) + t('（部分）') : '—') : fmtInt(b.requests ?? 0) })}</div>` +
+      `<div class="tr"><span>${t('{v1}输入', { v1: dot('var(--tok-in)') })}</span><b>${fmtInt(b.input || 0)}</b></div>` +
+      `<div class="tr"><span>${t('{v1}输出', { v1: dot('var(--tok-out)') })}</span><b>${fmtInt(b.output || 0)}</b></div>` +
+      `<div class="tr"><span>${t('{v1}缓存创建', { v1: dot('var(--tok-cc)') })}</span><b>${fmtInt(b.cacheWrite || 0)}</b></div>` +
+      `<div class="tr"><span>${t('{v1}缓存命中', { v1: dot('var(--tok-cr)') })}</span><b>${fmtInt(b.cacheRead || 0)}</b></div>` +
+      `<div class="tr"><span>${t('成本')}</span><b>${uCostUnknown() ? '—' : '$' + (b.cost || 0).toFixed(6)}</b></div>`);
+  };
+  svg.onpointermove = (e) => { if (e.pointerType === 'mouse') show(e); };
+  svg.onpointerdown = show;
+  svg.onpointerleave = () => { hideTip(); rule?.setAttribute('opacity', '0'); };
+}
+
+/* 来源折线图：上 Agent 下业务两图区共享 X 轴，各自独立 Y 轴 */
+function uClassify() {
+  const agents = [], business = []; let exU = 0, exS = 0;
+  for (const c of U.data?.clients ?? []) {
+    if (c.client === 'shared') { exS += c.total.tokens; continue; }
+    if (!c.client) { exU += c.total.tokens; continue; }
+    if (!(c.total.requests > 0 || c.total.tokens > 0)) continue;
+    ((U.agents[c.client] ?? AGENTS[c.client]) ? agents : business).push(c);
+  }
+  const byAll = (a, b) => (b.totalAll?.tokens ?? b.total.tokens) - (a.totalAll?.tokens ?? a.total.tokens);
+  agents.sort(byAll); business.sort(byAll);
+  return { agents, business, exU, exS };
+}
+function uSrcColors(cls) {
+  // 按当前窗口 Token 用量降序分配分类色（前 10 名独立色，尾部落灰），与图例/曲线一致
+  const all = [...cls.agents, ...cls.business].sort((a, b) => b.total.tokens - a.total.tokens);
+  return new Map(all.map((c, i) => [c.client, i < 10 ? `var(--c${i + 1})` : 'var(--c-other)']));
+}
+function uSrcLegendHtml(cls) {
+  // 分组排列：Agent / 业务各一组，组内从左到右按 Token 用量降序；色块与趋势图图例同款式
+  const cmap = uSrcColors(cls);
+  const item = (c) => { const isAgent = !!(U.agents[c.client] ?? AGENTS[c.client]); const off = U.srcHidden.has(c.client); return `<button type="button" data-usrc="${esc(c.client)}" aria-pressed="${!off}" class="${off ? 'off' : ''}" title="${t('点击显隐曲线')}"><i style="background:${cmap.get(c.client)}"></i>${isAgent ? agentIcon(c.client) : ''}<em>${esc(isAgent ? (U.agents[c.client]?.label ?? AGENTS[c.client]?.label ?? srcLabel(c.client)) : srcLabel(c.client))}</em><b class="num">${fmtTok(c.total.tokens)}</b></button>`; };
+  const row = (l, list) => (list.length ? `<div class="u-src-row"><span class="u-grp">${l}</span>${list.map(item).join('')}</div>` : '');
+  return row('Agent', cls.agents) + row(t('业务'), cls.business);
+}
+function drawUSource() {
+  const svg = document.querySelector('#src-chart');
+  if (!svg || !U.data) return;
+  const cls = uClassify();
+  const cmap = uSrcColors(cls);
+  const scol = (c) => cmap.get(c) ?? 'var(--c-other)';
+  const vis = (list) => list.filter((c) => !U.srcHidden.has(c.client));
+  const agV = vis(cls.agents), bzV = vis(cls.business);
+  const fmtSrc = (v) => { if (MGI18n.lang === 'en') return MGI18n.fmtCompact(v); return (v >= 1e8 ? (v / 1e8).toFixed(2) + ' 亿' : v >= 1e4 ? (v / 1e4).toFixed(2) + ' 万' : String(Math.round(v))); };
+  const W = Math.max(240, Math.round(svg.parentElement.clientWidth || 1040)), H = W < 500 ? 400 : 270, R = 12;
+  const maxima = [agV, bzV].map((list) => uNiceCeil(Math.max(...list.flatMap((s) => s.buckets.map((b) => b.tokens ?? 0)), 1)));
+  const ticks = maxima.map((max) => { const steps = Math.min(4, max); return Array.from({ length: steps + 1 }, (_, i) => max * (1 - i / steps)); });
+  const L = Math.max(40, ...ticks.flat().map((v) => [...fmtSrc(v)].reduce((w, ch) => w + (ch.charCodeAt(0) > 255 ? 10.5 : 6.5), 0) + 14));
+  const T1 = 26, H1 = (H - 96) / 2, T2 = T1 + H1 + 40, H2 = H1, timeY = H - 8;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const iw = W - L - R;
+  const ref = agV[0]?.buckets ?? bzV[0]?.buckets ?? [];
+  const n = Math.max(ref.length, 2);
+  const X = (i) => L + (n <= 1 ? iw / 2 : (i / (n - 1)) * iw);
+  let g = '';
+  const pane = (T, Hh, list, max, label, tickList) => {
+    const Y = (v) => T + Hh - (v / max) * Hh;
+    for (const tv of tickList) { const y = Y(tv); g += `<line x1="${L}" y1="${y.toFixed(1)}" x2="${W - R}" y2="${y.toFixed(1)}" stroke="var(--hair)" ${tv === 0 ? '' : 'opacity=".45"'}/><text x="${L - 8}" y="${(y + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)">${fmtSrc(tv)}</text>`; }
+    const sum = list.reduce((a, s) => a + (s.total.tokens || 0), 0);
+    g += `<text x="${L}" y="${T - 12}" font-size="11" font-weight="650" fill="var(--muted)">${label}</text>`;
+    if (sum > 0) g += `<text x="${W - R}" y="${T - 12}" text-anchor="end" font-size="11" fill="var(--muted)">${fmtTok(sum)}</text>`;
+    if (!list.length) g += `<text x="${(L + W - R) / 2}" y="${T + Hh / 2}" text-anchor="middle" font-size="12" fill="var(--muted)">${t('窗口内无{v1}来源用量', { v1: label })}</text>`;
+    list.forEach((s, si) => {
+      const pts = s.buckets.map((b, bi) => [X(bi), Y(b.tokens ?? 0)]);
+      if (pts.length < 2) return;
+      const d = pts.map(([px, py], j) => `${j ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`).join('');
+      const peak = Math.max(...s.buckets.map((b) => b.tokens ?? 0));
+      const color = scol(s.client);
+      if (peak >= max * 0.05) { const fid = `sf-${T}-${si}`; g += `<defs><linearGradient id="${fid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity=".02"/></linearGradient></defs><path d="${d}L${pts[pts.length - 1][0].toFixed(1)},${(T + Hh).toFixed(1)}L${pts[0][0].toFixed(1)},${(T + Hh).toFixed(1)}Z" fill="url(#${fid})"/>`; }
+      g += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round"/>`;
+    });
+  };
+  pane(T1, H1, agV, maxima[0], 'Agent', ticks[0]);
+  pane(T2, H2, bzV, maxima[1], t('业务'), ticks[1]);
+  const unit = U.data.unit;
+  const step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 85))));
+  for (let i = 0; i < ref.length; i += step) g += `<text x="${X(i).toFixed(1)}" y="${timeY}" text-anchor="middle" font-size="11" fill="var(--muted)">${uBucketLabel(ref[i].t, unit)}</text>`;
+  svg.innerHTML = `${g}<line class="u-rule" x1="0" x2="0" y1="${T1}" y2="${T2 + H2}" stroke="var(--accent)" stroke-width="1" opacity="0"/>`;
+  /* hover：竖线 + 分来源数值 tip（与「使用趋势」同机制；触屏点按也可）。
+ *  2026-11-04 修复：此前只画线不挂 pointer，悬停无任何数据展示 */
+  if (!ref.length) return;
+  const rule = svg.querySelector('.u-rule');
+  const srcName = (c) => U.agents[c]?.label ?? AGENTS[c]?.label ?? srcLabel(c);
+  const show = (e) => {
+    const r = svg.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    if (px < L - 4 || px > W - R + 4) { hideTip(); rule.setAttribute('opacity', '0'); return; }
+    const i = Math.min(ref.length - 1, Math.max(0, Math.round(((px - L) / iw) * (n - 1))));
+    rule.setAttribute('x1', X(i)); rule.setAttribute('x2', X(i)); rule.setAttribute('opacity', '.6');
+    // 只列可见曲线（图例可显隐）且该桶有值的来源，按用量降序；超过 9 个折叠尾部
+    const rows = [...agV, ...bzV]
+      .map((s) => ({ name: srcName(s.client), color: scol(s.client), v: s.buckets[i]?.tokens ?? 0 }))
+      .filter((x) => x.v > 0).sort((a, b) => b.v - a.v);
+    const total = rows.reduce((a, x) => a + x.v, 0);
+    const dot = (c) => `<i style="background:${c}"></i>`;
+    const top = rows.slice(0, 9);
+    const restV = rows.slice(9).reduce((a, x) => a + x.v, 0);
+    showTip(e, `<div class="tt">${t('{v1} · 合计 {v2}', { v1: uBucketLabel(ref[i].t, unit), v2: fmtTok(total) })}</div>` +
+      (top.length ? top.map((x) => `<div class="tr"><span>${dot(x.color)}${esc(x.name)}</span><b>${fmtTok(x.v)}</b></div>`).join('') : `<div class="tr"><span class="muted">${t('该时段无来源用量')}</span></div>`) +
+      (rows.length > 9 ? `<div class="tr"><span class="muted">${t('…其余 {v1} 个来源', { v1: rows.length - 9 })}</span><b>${fmtTok(restV)}</b></div>` : ''));
+  };
+  svg.onpointermove = (e) => { if (e.pointerType === 'mouse') show(e); };
+  svg.onpointerdown = show;
+  svg.onpointerleave = () => { hideTip(); rule?.setAttribute('opacity', '0'); };
+}
+
+function drawU() { drawUTrend(); drawUSource(); }
+
+function viewChannels() {
+  const focus = hashParam(); // 概览额度卡「查看用量」带渠道定位 → 首次进入转为渠道筛选并默认今天；之后用户可自由修改筛选
+  if (focus && focus !== U.lastFocus) { U.lastFocus = focus; U.prov = focus; U.range = 'today'; U.data = null; loadU(); }
+  if (!U.data && !U.loading && !U.error) { loadU(); }
+  let inner;
+  if (U.error) {
+    inner = `<section class="card" style="padding:20px"><p class="crit" style="margin:0">${U.error === 'usage-disabled' ? t('使用统计尚未启用') : esc(U.error)}</p><p class="muted" style="font-size:12px">${t('稍后自动重试，或点右上角刷新。')}</p></section>`;
+  } else if (!U.data) {
+    inner = `<div class="u-filters" aria-hidden="true">${`<div class="skel" style="width:170px;height:30px"></div>`.repeat(3)}<div class="skel" style="width:220px;height:30px"></div></div>
+    <section class="card u-hero" style="padding:18px"><div class="u-hero-grid">${skUPrimary()}${skUPrimary()}<div class="u-mini-grid">${skUTile().repeat(4)}</div></div><div class="skel" style="height:10px;border-radius:5px;margin-top:16px"></div></section>
+    <div class="grid-2">${skChartCard(220)}${skChartCard(220)}</div>`;
+  } else {
+    const totals = U.data.totals;
+    const cls = uClassify();
+    inner = `${uHeroHtml(totals)}
+    <section class="card"><div class="card-h"><h2>${t('使用趋势')}</h2></div>
+      <div class="u-legend">${uLegendHtml()}</div>
+      <div class="chart-wrap"><svg id="u-chart" role="img" aria-label="${t('用量与成本双刻度趋势图')}"></svg></div>
+    </section>
+    <section class="card"><div class="card-h"><h2>${t('来源用量')}</h2></div>
+      <div class="u-legend u-src-legend">${uSrcLegendHtml(cls)}</div>
+      <div class="chart-wrap"><svg id="src-chart" role="img" aria-label="${t('来源用量折线图')}"></svg></div>
+    </section>`;
+  }
+  return subTabs('usage-channels', kindSeg()) + `<div class="view">${uFiltersHtml()}${inner}</div>`;
+}
+
+/* ── 用量 · 设备 ── */
+function viewUsageDevices() {
+  if (!S) return subTabs('usage-devices') + `<div class="view">${skTableCard(t('采集设备'), 6)}</div>`;
+  const days = daysBack(30);
+  const NAME = { gateway: t('网关'), nas: 'NAS', mac: 'Mac' };
+  const cards = S.devices.map((d) => {
+    const v = days.map((day) => S.dayDevice.filter((x) => x.day === day && x.device === d.device).reduce((a, x) => a + x.tokens, 0));
+    const tot = v.reduce((a, x) => a + x, 0);
+    return `<section class="card"><div class="card-h"><h2>${NAME[d.device] ?? esc(d.device)}</h2><span class="chip ${d.kind === 'served' ? 'info' : 'ghost'}">${KIND_LABEL[d.kind]}</span></div>
+      <div class="num" style="font-size:20px;font-weight:650">${fmtTok(tot)}</div><div class="muted" style="font-size:12px">${t('近 30 天 Tokens · 最近数据 {v1} · 近 7 天 {v2} 条记录', { v1: relTime(d.lastSeen), v2: fmtInt(d.records7d) })}</div>
+      <div style="margin-top:10px">${sparkline(v)}</div></section>`;
+  }).join('');
+  return subTabs('usage-devices') + `<div class="view"><div class="grid-3">${cards}</div>
+    </div>`;
+}
+
+/* ── 网关 ── */
+function viewCatalog() {
+  if (!S) return subTabs('gateway-catalog') + `<div class="view">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">${`<div class="card" style="padding:12px;display:grid;gap:8px">${skBar('46%', 13)}${skBar('72%', 10)}</div>`.repeat(3)}</div>
+    <div style="height:10px"></div>${skTableCard(t('模型目录'), 8)}</div>`;
+  const sel = state.catalogProv || null;
+  const models = new Map();
+  for (const p of S.providers) for (const m of p.models) {
+    if (!models.has(m.id)) models.set(m.id, { id: m.id, modalities: m.modalities, chain: m.chain, monitor: m.monitor, owners: [] });
+    models.get(m.id).owners.push(p.id);
+  }
+  let rows = [...models.values()].sort((a, b) => (a.monitor - b.monitor) || a.id.localeCompare(b.id));
+  if (sel) rows = rows.filter((m) => m.owners.includes(sel) || (m.chain ?? []).some((c) => c.providerId === sel));
+  const MOD = { text: t('文本'), image: t('图像'), pdf: 'PDF' };
+  return subTabs('gateway-catalog') + `<div class="view">
+    <div class="prov-strip">${S.providers.map((p) => { const n = p.models.filter((m) => !m.monitor).length; return `<button class="prov" type="button" data-prov="${esc(p.id)}" aria-pressed="${sel === p.id}">${provLogo(p)}<div><div style="font-weight:600">${esc(p.name)}</div><div class="s">${p.monitor ? t('只读监控') : p.healthy === false ? t('状态异常') : p.circuit?.phase === 'open' ? t('熔断冷却') : p.circuit?.phase === 'half_open' ? t('恢复试探') : t('可路由')}</div></div><span class="n">${p.monitor ? t('{v1} 模型', { v1: p.models.length }) : t('{v1} 模型', { v1: n })}</span></button>`; }).join('')}</div>
+    <section class="card"><div class="card-h"><h2>${t('模型与调用链')}</h2>${sel ? `<span class="chip info">${esc(provName(sel))}<button type="button" data-prov="" style="border:0;background:none;color:inherit;cursor:pointer;padding:0 0 0 4px" aria-label="${t('显示全部渠道')}">✕</button></span>` : `<span class="meta">${t('点上方渠道只看它的模型；按顺序尝试，前一个失败或额度将尽时由下一个接力')}</span>`}</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${t('模型')}</th><th>${t('输入能力')}</th><th>${t('调用链')}</th></tr></thead><tbody>
+      ${rows.length ? rows.map((m) => `<tr><td><span class="num" style="font-family:var(--mono);font-size:12.5px">${esc(modelLabel(m.id))}</span></td><td>${(m.modalities || ['text']).map((x) => `<span class="chip ghost">${MOD[x] ?? x}</span>`).join(' ')}</td>
+        <td>${m.monitor ? `<span class="muted">${t('只读监控 · 不经网关路由')}</span>` : `<div class="chain">${(m.chain.length ? m.chain : m.owners.map((o) => ({ providerId: o, model: m.id }))).map((c, i) => { const hot = sel && c.providerId === sel; return `${i ? '<span class="arr">→</span>' : ''}<span class="hop ${i ? '' : 'first'}" ${hot ? 'style="background:var(--accent-wash);box-shadow:none;font-weight:550"' : ''}>${esc(provName(c.providerId))}${c.model && c.model !== m.id ? ` · ${esc(modelLabel(c.model))}` : ''}</span>`; }).join('')}</div>`}</td></tr>`).join('') : `<tr><td colspan="3" class="empty">${t('这个渠道没有可路由模型')}</td></tr>`}
+      </tbody></table></div></section>
+    </div>`;
+}
+function infoRows(cand, cur) {
+  const MOD = { text: t('文本'), image: t('图像'), pdf: 'PDF' };
+  const mods = (i) => (i?.modalities?.input ?? []).map((x) => MOD[x] ?? x).join(MGI18n.lang === 'en' ? ', ' : '、') || '—';
+  const price = (i, k) => i?.cost?.[k] != null ? '$' + i.cost[k] : '—';
+  const delta = (k) => { const a = cur?.cost?.[k], b = cand?.cost?.[k]; if (a == null || b == null || !a) return ''; const d = (b - a) / a; if (!d) return `<span class="muted">${t('持平')}</span>`; return `<span class="${d > 0 ? 'delta-up' : 'delta-down'}">${d > 0 ? '↑' : '↓'}${Math.abs(d * 100).toFixed(0)}%</span>`; };
+  return [[t('输入能力'), mods(cur), mods(cand), ''], [t('输入价格（每百万）'), price(cur, 'input'), price(cand, 'input'), delta('input')], [t('输出价格（每百万）'), price(cur, 'output'), price(cand, 'output'), delta('output')], [t('上下文'), cur?.ctx ? fmtInt(cur.ctx) : '—', cand?.ctx ? fmtInt(cand.ctx) : '—', ''], [t('最大输出'), cur?.maxout ? fmtInt(cur.maxout) : '—', cand?.maxout ? fmtInt(cand.maxout) : '—', '']];
+}
+const sameAs = (i) => i.refinfo && JSON.stringify([i.info?.cost?.input, i.info?.cost?.output, i.info?.ctx, i.info?.maxout]) === JSON.stringify([i.refinfo.cost.input, i.refinfo.cost.output, i.refinfo.ctx, i.refinfo.maxout]);
+function viewSuggestions() {
+  if (!S) return subTabs('gateway-suggestions') + `<div class="view">${skCard(t('模型建议'), skRows(4))}</div>`;
+  const items = S.inbox.filter((i) => i.status === 'pending' || i.status === 'failed');
+  const rb = INBOX.rollback;
+  const ACT = { added: t('新增'), replaced: t('替换'), removed: t('移除') };
+  const rbRow = rb && ACT[rb.action]
+    ? `<div class="card" style="display:flex;align-items:center;gap:10px;padding:12px 16px;flex-wrap:wrap"><span style="font-size:12px;color:var(--ink-2)">${t('最近落地：{v1} · {v2} {v3}', { v1: esc(provName(rb.providerId)), v2: ACT[rb.action], v3: rb.old ? esc(modelLabel(rb.old)) + ' → ' : '' })}<b style="font-family:var(--mono);font-weight:600">${esc(modelLabel(rb.model))}</b> · ${relTime(rb.at)}</span>${rb.canRollback ? `<button class="probe-btn" type="button" data-rollback="1">${t('回滚此次落地')}</button>` : `<span class="muted" style="font-size:11px">${t('配置已被后续修改，自动回滚不可用')}</span>`}<span class="muted" style="font-size:11px">${t('备份保留在网关数据卷（最近 10 份）')}</span></div>`
+    : '';
+  const KIND = { upgrade: (i) => i.old ? t('升级') : t('新系列'), retire: () => t('疑似退役') };
+  const cards = items.map((i) => {
+    const ref = i.old ?? (PROV[i.providerId]?.models.find((m) => !m.monitor)?.id ?? null);
+    const acts = i.kind === 'retire' ? [['remove', t('确认移除'), 'danger'], ['dismiss', t('放弃'), '']] : i.old ? [['add', t('添加并保留旧版'), 'primary'], ['replace', t('替换旧版'), ''], ['dismiss', t('放弃'), '']] : [['add', t('添加'), 'primary'], ['replace', t('替换 {v1}', { v1: ref ? modelLabel(ref) : t('现有') }), ''], ['dismiss', t('放弃'), '']];
+    return `<article class="card sugg"><div class="sugg-h">${provLogo(PROV[i.providerId] ?? { id: i.providerId, name: provName(i.providerId) }, true)}<b>${esc(provName(i.providerId))}</b><span class="chip info">${KIND[i.kind](i)}</span><span class="when">${t('{v1}确认', { v1: relTime(i.lastSeen) })}</span></div>
+      <div class="tbl-wrap"><table class="tbl cmp"><thead><tr><th></th><th>${t('现有 ·')} <span style="font-family:var(--mono)">${esc(modelLabel(ref))}</span></th><th>${t('发现 ·')} <span style="font-family:var(--mono);color:var(--accent)">${esc(modelLabel(i.model))}</span></th><th>${t('变化')}</th></tr></thead>
+      <tbody>${infoRows(i.info, i.oldinfo ?? i.refinfo).map(([k, a, b, d]) => `<tr><td>${k}</td><td class="num">${a}</td><td class="num">${b}</td><td>${d}</td></tr>`).join('')}</tbody></table></div>
+      ${i.old ? '' : `<p class="muted" style="margin:0;font-size:12px">${t('「发现」是新系列、没有旧版；「现有」列取同渠道模型 {v1} 作对比基准，点「替换」会用发现的模型直接换掉它。{v2}', { v1: esc(modelLabel(ref)), v2: sameAs(i) ? `<b>${t('发现与现有的价格、能力、上下文完全一致，可能只是同一模型的新名字。')}</b>` : '' })}</p>`}
+      <div class="actions">${acts.map(([a, l, cls]) => `<button class="btn ${cls}" type="button" data-act="${a}" data-id="${i.id}">${l}</button>`).join('')}</div></article>`;
+  }).join('');
+  return subTabs('gateway-suggestions') + `<div class="view">${rbRow}${cards || `<div class="card empty">${t('没有待处理的建议')}</div>`}
+    </div>`;
+}
+function openConfirm(id, act) {
+  const i = S.inbox.find((x) => x.id === id); if (!i) return;
+  const p = PROV[i.providerId]; const before = (p?.models ?? []).filter((m) => !m.monitor).map((m) => m.id);
+  const ref = i.old ?? before[0] ?? null;
+  const after = act === 'add' ? [...before, i.model] : act === 'replace' ? before.map((m) => m === ref ? i.model : m) : act === 'remove' ? before.filter((m) => m !== i.old) : before;
+  const TITLE = { add: t('添加模型'), replace: t('替换模型'), remove: t('确认移除'), dismiss: t('放弃此建议') };
+  const diff = act === 'dismiss' ? `<p class="muted" style="margin:0">${t('不改配置；以后出现更高版本仍会提醒。')}</p>` : `<div class="diff">${before.filter((m) => !after.includes(m)).map((m) => `<div class="del">- ${esc(modelLabel(m))}</div>`).join('')}${before.filter((m) => after.includes(m)).map((m) => `<div>  ${esc(modelLabel(m))}</div>`).join('')}${after.filter((m) => !before.includes(m)).map((m) => `<div class="add">+ ${esc(modelLabel(m))}</div>`).join('')}</div>`;
+  const bg = document.createElement('div'); bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt"><h3 id="mt">${TITLE[act]} · ${esc(provName(i.providerId))}</h3>
+    <div><div class="muted" style="font-size:12px;margin-bottom:6px">${t('模型清单变更')}</div>${diff}</div>
+    ${act !== 'dismiss' && act !== 'remove' ? `<div><div class="muted" style="font-size:12px;margin-bottom:6px">${t('价格（每百万 Tokens）')}</div><div class="num">${t('输入 ${v1} · 输出 ${v2}', { v1: i.info?.cost?.input ?? '—', v2: i.info?.cost?.output ?? '—' })}</div></div>` : ''}
+    <div class="actions" style="justify-content:flex-end"><button class="btn" type="button" data-close>${t('取消')}</button><button class="btn ${act === 'remove' ? 'danger' : 'primary'}" type="button" data-apply>${t('确认执行')}</button></div></div>`;
+  bg.addEventListener('click', async (e) => {
+    // data-close 与 data-apply 是两个互斥按钮：确认钮不能带 data-close —— 布尔空属性
+    // 使 dataset.apply === ''，旧写法 `!dataset.apply` 会把「确认执行」误判成关闭分支，
+    // 弹窗直接关掉、preview/apply 请求根本不发（线上「点添加模型没反应」根因）。
+    if (e.target === bg || e.target.closest('[data-close]')) { bg.remove(); return; }
+    const btn = e.target.closest('[data-apply]');
+    if (!btn) return;
+    btn.disabled = true; btn.textContent = t('执行中…');
+    try {
+      const pv = await fetch('/internal/inbox/preview', { method: 'POST', headers: { 'content-type': 'application/json', 'x-inbox-csrf': INBOX.csrf }, body: JSON.stringify({ id, action: act }) }).then((r) => r.json());
+      if (!pv.token) throw new Error(pv.error ?? t('预览失败'));
+      const ap = await fetch('/internal/inbox/apply', { method: 'POST', headers: { 'content-type': 'application/json', 'x-inbox-csrf': INBOX.csrf }, body: JSON.stringify({ token: pv.token }) }).then((r) => r.json());
+      if (ap.error) throw new Error(ap.error);
+      bg.remove();
+      await simulateRefresh();
+    } catch (err) { btn.disabled = false; btn.textContent = t('失败：') + err.message; }
+  });
+  document.body.append(bg); bg.querySelector('[data-close]').focus();
+}
+function viewKeys() {
+  if (!S) return subTabs('gateway-keys') + `<div class="view">${skTableCard(t('应用密钥'), 5)}</div>`;
+  const ST = { ok: ['good', t('正常')], missing: ['warn', t('未配置')], conflict: ['crit', t('冲突')] };
+  const keyRow = (k) => {
+    const a = AGENTS[k.app];
+    const icon = a ? agentIcon(k.app) : `<span class="dot" style="background:${srcColor(k.app)}"></span>`;
+    let h = 0; for (const ch of String(k.app)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    const last4 = String(h % 10000).padStart(4, '0');
+    return `<tr><td><div class="name">${icon}<span class="t">${esc(k.app === 'shared' ? t('共享密钥') : k.app)}</span>${a ? ` <span class="chip ghost">${a.location === 'local' ? t('本地') : t('云端')}</span>` : ''}</div></td>
+      <td><span style="font-family:var(--mono);font-size:12.5px;color:var(--muted)">${k.status === 'missing' ? '—' : `•••• •••• ${last4}`}</span></td>
+      <td><span class="chip ${ST[k.status][0]}">${k.status === 'ok' ? I.ok : I.warn}${ST[k.status][1]}</span></td><td class="r muted">${k.lastSeen ? relTime(k.lastSeen) : t('从未使用')}</td><td class="r"><a class="alink" href="#usage-sources/${encodeURIComponent(k.app ?? '')}">${t('用量 ›')}</a></td></tr>`;
+  };
+  const agentKeys = [...S.keys].filter((k) => k.agent);
+  const bizKeys = [...S.keys].filter((k) => !k.agent);
+  const grp = (t) => `<tr class="grp"><td colspan="5">${t}</td></tr>`;
+  return subTabs('gateway-keys') + `<div class="view">
+    <section class="card"><div class="card-h"><h2>${t('应用密钥')}</h2></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${t('应用')}</th><th>Key</th><th>${t('状态')}</th><th class="r">${t('最近使用')}</th><th></th></tr></thead><tbody>
+    ${grp('Agent')}${agentKeys.map(keyRow).join('') || `<tr><td colspan="5" class="empty">${t('没有 Agent')}</td></tr>`}
+    ${grp(t('业务应用'))}${bizKeys.map(keyRow).join('') || `<tr><td colspan="5" class="empty">${t('没有业务应用')}</td></tr>`}
+    </tbody></table></div></section>
+    </div>`;
+}
+
+/* ── 日志 ── */
+function viewRequests() {
+  if (!S) return subTabs('logs-requests') + `<div class="view">${skTableCard(t('请求日志'), 8)}</div>`;
+  const f = state.logFilter;
+  const rows = S.logs.filter((l) => f === 'all' || (f === 'failed' ? !l.ok && !l.clientAbort : l.clientAbort)).slice(0, state.logLimit);
+  return subTabs('logs-requests') + `<div class="view">
+    <section class="card"><div class="card-h"><h2>${t('请求')}</h2><div class="controls">${seg('logFilter', [['all', t('全部')], ['failed', t('失败')], ['abort', t('客户端中断')]], f)}${limitSel('logLimit')}</div></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${t('时间')}</th><th>${t('来源')}</th><th>${t('渠道 · 模型')}</th><th class="r">Tokens</th><th class="r">${t('耗时')}</th><th class="r">${t('状态')}</th></tr></thead><tbody>
+    ${rows.map((l) => { const totals = l.usage ? KINDS.reduce((a, [k]) => a + l.usage[k], 0) : 0; const st = l.ok ? ['good', t('成功')] : l.clientAbort ? ['', t('中断')] : ['crit', I.crit + (l.status ?? t('失败'))]; return `<tr><td class="num muted">${clock(l.ts)}</td><td>${esc(srcLabel(l.client))}</td><td><span class="muted">${esc(provName(l.providerId))}</span> · <span style="font-family:var(--mono);font-size:12.5px">${esc(modelLabel(l.model))}</span></td><td class="r num">${totals ? fmtInt(totals) : '—'}</td><td class="r num">${l.latencyMs != null ? (l.latencyMs / 1000).toFixed(1) + 's' : '—'}</td><td class="r"><span class="chip ${st[0]}">${st[1]}</span></td></tr>`; }).join('') || `<tr><td colspan="6" class="empty">${t('没有符合条件的请求')}</td></tr>`}
+    </tbody></table></div></section>
+    </div>`;
+}
+let EV;
+labelUpdates.push(() => { EV = { activation: ['good', t('窗口激活')], model_guard: ['info', t('模型巡检')], model_inbox_applied: ['good', t('模型落地')], model_inbox_rollback: ['warn', t('模型回滚')], model_inbox_error: ['crit', t('落地异常')], client_abort: ['', t('客户端中断')], probe_error: ['crit', t('额度查询异常')], quota_restored: ['good', t('额度恢复')], quota_demoted: ['warn', t('额度将尽降级')], vision_placeholder: ['', t('图片占位')], vision_reroute: ['info', t('视觉改写')], token_refresh: ['', t('令牌轮换')], fallback: ['warn', t('接力切换')], request_error: ['crit', t('请求失败')], config_model_unknown: ['warn', t('未知模型')], embeddings_degraded: ['warn', t('向量降级')], embeddings_error: ['crit', t('向量异常')], imagegen: ['good', t('图片生成')], imagegen_error: ['crit', t('图片生成失败')] }; });
+labelUpdates.at(-1)();
+/* 事件明细副行：按类型回答「谁、在哪、出了什么」；返回纯文本（调用方 esc） */
+let INBOX_ACT;
+labelUpdates.push(() => { INBOX_ACT = { add: t('新增'), replace: t('替换'), remove: t('移除') }; });
+labelUpdates.at(-1)();
+let ERR_KIND_CN;
+labelUpdates.push(() => { ERR_KIND_CN = { timeout: t('上游超时'), network: t('网络错误'), auth: t('鉴权失败'), rate_limited: t('限流'), server_error: t('上游 5xx'), client_error: t('上游 4xx') }; });
+labelUpdates.at(-1)();
+let TRIG_CN;
+labelUpdates.push(() => { TRIG_CN = { margin: t('到期前刷新'), expired: t('到期刷新'), sentinel: t('哨兵检查') }; });
+labelUpdates.at(-1)();
+const evJoin = (xs) => xs.filter(Boolean).join(' · ');
+function evDetail(e) {
+  switch (e.type) {
+    case 'client_abort': return evJoin([e.client ? t('{v1}中断响应', { v1: srcLabel(e.client) }) : '', e.path]);
+    case 'request_error': return evJoin([e.status ? `HTTP ${e.status}` : '', ERR_KIND_CN[e.kind] ?? e.kind, e.client ? srcLabel(e.client) : '', e.path, e.error]);
+    case 'probe_error': return evJoin([e.error, e.failures > 1 ? t('连续第 {v1} 次，下轮自动重试', { v1: e.failures }) : '']);
+    case 'fallback': return evJoin([`${provName(e.from)} → ${provName(e.to)}`, e.status ? `HTTP ${e.status}` : '', e.reason]);
+    case 'activation': return e.ok === true
+      ? evJoin([t('第 {v1} 次成功', { v1: e.attempt ?? 1 }), e.durationMs != null ? `${Math.round(e.durationMs)}ms` : '', e.resetFor ? t('新窗口 {v1}', { v1: clock(e.resetFor) }) : ''])
+      : evJoin([t('第 {v1} 次失败', { v1: e.attempt ?? 1 }), e.quotaExhausted ? t('额度已耗尽') : '', e.error]);
+    case 'token_refresh': return evJoin([TRIG_CN[e.trigger] ?? e.trigger, e.ok === true
+      ? (e.expiresAt ? t('新 token 有效至 {v1}', { v1: clock(e.expiresAt) }) : t('成功'))
+      : (e.error ?? t('失败'))]);
+    case 'quota_demoted': return evJoin([t('用量 {v1}% 触发降级线 {v2}%', { v1: Math.round(e.usedPercent ?? 0), v2: Math.round(e.threshold ?? 0) }), t('降级到链尾')]);
+    case 'quota_restored': return evJoin([t('用量回落至 {v1}%', { v1: Math.round(e.usedPercent ?? 0) }), t('恢复路由')]);
+    case 'vision_reroute': return evJoin([`${modelLabel(e.from)} → ${modelLabel(e.to)}`, e.newImages != null ? t('{v1} 张新图', { v1: e.newImages }) : '']);
+    case 'vision_placeholder': return evJoin([e.placeholderCount != null ? t('{v1} 张图转占位', { v1: e.placeholderCount }) : '', e.from ? modelLabel(e.from) : '']);
+    case 'model_inbox_applied': return evJoin([t('落地：{v1}', { v1: INBOX_ACT[e.action] ?? e.action }), e.old ? t('换下 {v1}', { v1: modelLabel(e.old) }) : '']);
+    case 'model_inbox_rollback': return evJoin([t('回滚：{v1}', { v1: INBOX_ACT[e.action] ?? e.action }), e.old ? t('恢复 {v1}', { v1: modelLabel(e.old) }) : '']);
+    case 'model_guard': return evJoin([e.newModels ? t('发现 {v1} 个新模型', { v1: e.newModels }) : t('无新发现'), Array.isArray(e.retired) && e.retired.length ? t('疑似退役 {v1} 个（{v2}）', { v1: e.retired.length, v2: e.retired.slice(0, 3).map((r) => r.split('/').pop()).join(MGI18n.lang === 'en' ? ', ' : '、') }) : '', e.applied ? t('已自动落地') : (e.dryRun ? 'dry-run' : '')]);
+    case 'model_inbox_error': case 'embeddings_error': case 'imagegen_error': case 'model_guard_error': return e.message ?? e.error ?? '';
+    case 'embeddings_degraded': return evJoin([e.model ? modelLabel(e.model) : '', e.via ? t('改走 {v1}', { v1: modelLabel(e.via) }) : '']);
+    case 'config_model_unknown': return evJoin([t('models.dev 未收录或类型不符'), e.model ? modelLabel(e.model) : '']);
+    default: return e.error ?? e.message ?? '';
+  }
+}
+function viewEvents() {
+  if (!S) return subTabs('logs-events') + `<div class="view">${skTableCard(t('事件'), 8)}</div>`;
+  const f = state.evFilter;
+  const groups = [];
+  for (const e of S.events) { if (f === 'issues' && !['crit', 'warn'].includes((EV[e.type] ?? [''])[0])) continue; const last = groups.at(-1); if (last && last.type === e.type && last.model === e.model && last.providerId === e.providerId && last.client === e.client) last.n++; else groups.push({ ...e, n: 1 }); }
+  const shown = groups.slice(0, state.evLimit);
+  return subTabs('logs-events') + `<div class="view">
+    <section class="card"><div class="card-h"><h2>${t('事件')}</h2><div class="controls">${seg('evFilter', [['all', t('全部')], ['issues', t('只看问题')]], f)}${limitSel('evLimit')}</div></div>
+    <div class="tbl-wrap"><table class="tbl"><tbody>${shown.map((e) => { const [lv, l] = EV[e.type] ?? ['', e.type]; const pn = e.providerId != null ? provName(e.providerId) : '—'; const main = (pn !== '—' ? esc(pn) : '') + (e.model ? `${pn !== '—' ? ' · ' : ''}<span style="font-family:var(--mono);font-size:12.5px">${esc(modelLabel(e.model))}</span>` : ''); const d = evDetail(e); return `<tr><td class="num muted" style="width:90px">${clock(e.ts)}</td><td style="width:140px"><span class="chip ${lv}">${l}</span></td><td><div>${main || (d ? '' : `<span class="muted">${esc(l)}</span>`)}${e.n > 1 ? ` <span class="muted">× ${e.n}</span>` : ''}</div>${d ? `<div class="muted" style="font-size:12px;max-width:640px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d)}">${esc(d)}</div>` : ''}</td></tr>`; }).join('')}</tbody></table></div></section>
+    </div>`;
+}
+
+/* ── 渲染 ── */
+let firstOverview = !store.get('seenOverview', false);
+const pillPos = new Map(); // key -> 上次选中项位置，跨重渲染做 FLIP 滑动
+function mountPills() {
+  for (const c of document.querySelectorAll('.tabs2, .seg')) {
+    const key = c.id || (c.dataset.seg ? 'seg:' + c.dataset.seg : 'tabs2:' + (c.getAttribute('aria-label') || ''));
+    const active = c.querySelector('[aria-current="page"], [aria-pressed="true"]');
+    if (!active) continue;
+    const pill = document.createElement('span');
+    pill.className = 'sl-pill'; c.prepend(pill);
+    const x = active.offsetLeft, w = active.offsetWidth, prev = pillPos.get(key);
+    if (prev) { pill.style.transition = 'none'; pill.style.transform = `translateX(${prev.x}px)`; pill.style.width = prev.w + 'px'; void pill.offsetWidth; pill.style.transition = ''; }
+    pill.style.transform = `translateX(${x}px)`;
+    pill.style.width = w + 'px';
+    pillPos.set(key, { x, w });
+  }
+}
+function repositionPills() {
+  document.querySelectorAll('.sl-pill').forEach((p) => {
+    const active = p.parentElement.querySelector('[aria-current="page"], [aria-pressed="true"]');
+    if (!active) return;
+    p.style.transition = 'none'; p.style.transform = `translateX(${active.offsetLeft}px)`; p.style.width = active.offsetWidth + 'px'; void p.offsetWidth; p.style.transition = '';
+  });
+}
+let lastView = null;
+function render() {
+  const view = currentView();
+  R_ENTERING = view !== lastView; lastView = view;
+  renderNav(view); hideTip();
+  const R = { overview: viewOverview, 'usage-summary': viewUsageSummary, 'usage-trends': viewUsageTrends, 'usage-sources': () => viewBreakdown('sources'), 'usage-channels': viewChannels, 'usage-models': () => viewBreakdown('models'), 'usage-devices': viewUsageDevices, 'gateway-catalog': viewCatalog, 'gateway-suggestions': viewSuggestions, 'gateway-keys': viewKeys, 'logs-requests': viewRequests, 'logs-events': viewEvents };
+  MGTopology.stop();
+  $('#main').innerHTML = (BOOT_ERR ? `<div class="alert crit" style="margin:12px 0">${I.crit}<div><b>${t('数据载入失败')}</b>${t('：{v1}，稍后自动重试；也可刷新页面。', { v1: esc(BOOT_ERR) })}</div></div>` : '') + R[view]();
+  if (view === 'overview' && S) MGTopology.mount(S, render);
+  mountPills();
+  animateRolls();
+  if (view === 'overview') { animateMeters(firstOverview || R_ENTERING); firstOverview = false; store.set('seenOverview', true); }
+  if (S && view === 'usage-summary') drawHeat();
+  if (S && view === 'usage-trends') drawTrends();
+  if (view === 'usage-channels') requestAnimationFrame(drawU);
+}
+document.addEventListener('change', (e) => {
+  const s = e.target.closest('select[data-limit]'); if (s) { const k = s.dataset.limit; const v = Number(s.value) || LIMIT_DEF[k]; if (LIMITS[k].includes(v)) { state[k] = v; save(); render(); } }
+  const uf = e.target.closest('select[data-uf]'); if (uf) { U[uf.dataset.uf] = uf.value; U.data = null; loadU(); }
+});
+document.addEventListener('click', (e) => {
+  // 占比卡片 → 来源/模型视角：跳转前把目标视角的时间档对齐到链接标注的时段（近 30 天）
+  const plink = e.target.closest('a[data-sync-period]');
+  if (plink) { const [k, v] = plink.dataset.syncPeriod.split(':'); state[k] = v === 'all' ? 'all' : +v; save(); }
+  const b = e.target.closest('[data-seg] button');
+  if (b) { const k = b.parentElement.dataset.seg; const v = b.dataset.v;
+    if (k === 'uRange') { U.range = v; U.data = null; loadU(); return; }
+    if (k === 'kind') { state.kind = v; save(); if (currentView() === 'usage-channels') { U.data = null; loadU(); } else render(); return; }
+    state[k] = /^\d+$/.test(v) ? Number(v) : v; save(); render(); return; }
+  const ucl = e.target.closest('[data-ufclear]'); if (ucl) { U.prov = ''; U.client = ''; U.model = ''; U.data = null; loadU(); return; }
+  const uk = e.target.closest('[data-uk]'); if (uk) { const k = uk.dataset.uk; U.hidden.has(k) ? U.hidden.delete(k) : U.hidden.add(k); const lg = document.querySelector('#main .u-legend'); if (lg) lg.innerHTML = uLegendHtml(); drawUTrend(); return; }
+  const us = e.target.closest('[data-usrc]'); if (us) { const c = us.dataset.usrc; U.srcHidden.has(c) ? U.srcHidden.delete(c) : U.srcHidden.add(c); const lg = document.querySelector('#main .u-src-legend'); if (lg) lg.innerHTML = uSrcLegendHtml(uClassify()); drawUSource(); return; }
+  const pb = e.target.closest('[data-prov]'); if (pb) { state.catalogProv = pb.dataset.prov || null; save(); render(); return; }
+  const h = e.target.closest('[data-hide]'); if (h) { const k = h.dataset.hide; hidden.has(k) ? hidden.delete(k) : hidden.add(k); store.set('hidden', [...hidden]); if (currentView() === 'usage-trends') { drawTrends(); h.setAttribute('aria-pressed', String(!hidden.has(k))); } else render(); return; }
+  const row = e.target.closest('tr.row'); if (row) { toggleBreakdownRow(row); return; }
+  const act = e.target.closest('[data-act]'); if (act) { openConfirm(act.dataset.id, act.dataset.act); return; }
+  const probe = e.target.closest('[data-probe]'); if (probe) { probeClick(probe); return; }
+  const rbBtn = e.target.closest('[data-rollback]'); if (rbBtn) { rbBtn.disabled = true; rbBtn.textContent = t('回滚中…'); fetch('/internal/inbox/rollback', { method: 'POST', headers: { 'content-type': 'application/json', 'x-inbox-csrf': INBOX.csrf }, body: '{}' }).then((r) => r.json()).then(async (d) => { if (d.error) { rbBtn.textContent = t('失败：') + d.error; return; } await simulateRefresh(false, 'all'); }).catch((err) => { rbBtn.textContent = t('失败：') + err.message; }); return; }
+});
+document.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('tr.row')) { e.preventDefault(); e.target.click(); } if (e.key === 'Escape') document.querySelector('.modal-bg')?.remove(); });
+/* 主题三态：auto（跟随系统）→ light → dark；按钮 icon/提示随态更新，系统切换实时跟随（对齐老版 common.js applyTheme） */
+const THEME_SVG = {
+  auto: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>',
+  light: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>',
+  dark: '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>',
+};
+let THEME_TIP;
+labelUpdates.push(() => { THEME_TIP = { auto: t('主题：跟随系统（点击切换）'), light: t('主题：浅色（点击切换）'), dark: t('主题：深色（点击切换）') }; });
+labelUpdates.at(-1)();
+const themeMq = matchMedia('(prefers-color-scheme: dark)');
+const applyTheme = () => {
+  const t = store.get('theme', null);
+  const mode = t === 'light' || t === 'dark' ? t : 'auto';
+  if (mode === 'auto') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = mode;
+  const btn = $('#theme');
+  btn.innerHTML = THEME_SVG[mode]; btn.title = THEME_TIP[mode]; btn.setAttribute('aria-label', THEME_TIP[mode]);
+};
+$('#theme').addEventListener('click', () => {
+  const t = store.get('theme', null);
+  const cur = t === 'light' || t === 'dark' ? t : 'auto';
+  const next = { auto: 'light', light: 'dark', dark: 'auto' }[cur];
+  store.set('theme', next === 'auto' ? null : next);
+  applyTheme(); render();
+});
+themeMq.addEventListener('change', () => { applyTheme(); });
+applyTheme();
+function updateChrome() {
+  document.documentElement.lang = MGI18n.lang;
+  document.title = t('Model Gateway 控制台');
+  $('.brand').setAttribute('aria-label', t('回到概览'));
+  $('#nav1').setAttribute('aria-label', t('主导航'));
+  $('#auto-btn').title = t('点击暂停 / 恢复自动刷新');
+  $('#live-tag').title = t('自动刷新于');
+  if (S) markLive(); else $('#live-tag').textContent = t('实时');
+  const button = $('#language');
+  button.textContent = t('中 / EN');
+  button.title = t('切换语言');
+  button.setAttribute('aria-label', t('切换语言'));
+  updateAutoBtn();
+  applyTheme();
+}
+$('#language').addEventListener('click', () => MGI18n.setLang(MGI18n.lang === 'zh' ? 'en' : 'zh'));
+MGI18n.onLang(() => {
+  for (const update of labelUpdates) update();
+  // Dismiss stale confirmation text; the current view keeps its filters and data.
+  document.querySelector('.modal-bg')?.remove();
+  updateChrome();
+  render(); // Stops topology before rebuilding it with the selected labels.
+});
+updateChrome();
+addEventListener('hashchange', () => { render(); startAutoRefresh(); });
+let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { repositionPills(); const v = currentView(); if (v === 'usage-summary') drawHeat(false); if (v === 'usage-trends') drawTrends(); if (v === 'usage-channels') drawU(); }, 150); });
+
+/* ── 真实数据装载 ── */
+async function fetchJson(url) {
+  const r = await fetch(url, { headers: { 'cache-control': 'no-cache' } });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error ?? (url + ' HTTP ' + r.status));
+  return d;
+}
+async function loadConsoleData(force = null) {
+  // force: null = 只读服务端快照（自动 60s）；'all' = 全局重查额度；providerId = 单渠道重查
+  const [dash, usage, keysD, inbox, activity, dClient, dModel, dProvider, dDevice, dClientModel, devices] = await Promise.all([
+    fetchJson('/internal/dashboard' + (force ? '?force=' + encodeURIComponent(force) : '')),
+    fetchJson('/internal/usage?range=today&logLimit=200&kind=served'),
+    fetchJson('/internal/keys'),
+    fetchJson('/internal/inbox'),
+    fetchJson('/internal/usage/activity'),
+    fetchJson('/internal/usage/daily?groupBy=day,client,kind'),
+    fetchJson('/internal/usage/daily?groupBy=day,model'),
+    fetchJson('/internal/usage/daily?groupBy=day,provider,kind'),
+    fetchJson('/internal/usage/daily?groupBy=day,device'),
+    fetchJson('/internal/usage/daily?groupBy=day,client,model'),
+    fetchJson('/internal/usage/devices'),
+  ]);
+  S = {
+    generatedAt: new Date().toISOString(),
+    providers: (dash.providers ?? []).map((p) => ({ ...p, name: p.displayName ?? p.name })),
+    events: dash.events ?? [],
+    fallbacksToday: dash.fallbacksToday ?? null,
+    features: dash.features ?? null,
+    today: { totals: usage.totals ?? {}, buckets: usage.buckets ?? [], modelNames: usage.modelNames ?? null },
+    logs: usage.logs ?? [],
+    keys: keysD.keys ?? [],
+    agents: keysD.agents ?? [],
+    topology: keysD.topology ?? {},
+    inbox: inbox.items ?? [],
+    inboxProviders: inbox.providers ?? {},
+    activity: { from: activity.from, to: activity.to, days: activity.days ?? [], stats: activity.stats ?? null },
+    dayClient: dClient.rows ?? [],
+    dayModel: dModel.rows ?? [],
+    dayProvider: (dProvider.rows ?? []).map((r) => ({ ...r, providerId: r.providerId ?? r.provider })).filter((r) => r.providerId), // API 字段名 provider；无渠道归属且零 token 的历史行不展示
+    dayDevice: dDevice.rows ?? [],
+    clientModel: dClientModel.rows ?? [],
+    devices: devices.devices ?? [],
+  };
+  INBOX = { csrf: inbox.csrf ?? '', providers: inbox.providers ?? {}, rollback: inbox.rollback ?? null };
+}
+function applyData() {
+  NOW = new Date(S.generatedAt);
+  TODAY = dayKey(NOW);
+  PROV = Object.fromEntries(S.providers.map((p) => [p.id, p]));
+  AGENTS = Object.fromEntries((S.agents || []).map((a) => [a.app, a]));
+  for (const [k, v] of Object.entries(S.today?.modelNames ?? {})) MODEL_NAMES.set(k, v);
+  SRC_COLOR = rankColors(S.dayClient, 'client');
+  MODEL_COLOR = rankColors(S.dayModel, 'model');
+  PROV_COLOR = rankColors(S.dayProvider, 'providerId');
+  rebuildProvOfModel();
+  pending = S.inbox.filter((i) => i.status === 'pending' || i.status === 'failed').length;
+}
+(async () => {
+  // 数据未到 → 各视图按自身布局渲染骨架（render 内部各 view 的 !S 分支）
+  render();
+  const wireAuto = () => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) simulateRefresh(true); });
+    document.querySelector('#auto-btn')?.addEventListener('click', () => { autoEnabled = !autoEnabled; updateAutoBtn(); });
+  };
+  try {
+    await loadConsoleData(); applyData(); markLive(); startAutoRefresh(); wireAuto();
+  } catch (e) {
+    BOOT_ERR = e.message; console.error(e); render();
+    // 骨架保留、顶部报错，稍后自动重试
+    setTimeout(async () => {
+      try { await loadConsoleData(); applyData(); BOOT_ERR = ''; startAutoRefresh(); wireAuto(); } catch {}
+      render();
+    }, 5000);
+    return;
+  }
+  render();
+})();
+</script>
+
+</body></html>

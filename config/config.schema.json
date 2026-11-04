@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "model-gateway/config.schema.json",
+  "title": "model-gateway config.yaml",
+  "description": "结构与键名的唯一说明；语义校验（链关系、视觉路由目标、重复 id 等）以 src/config.js validateConfig 为准。校验命令：npm run config:check [path]。所有密钥只写 env:VAR 引用。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["gateway", "providers"],
+  "$defs": {
+    "envRef": { "type": "string", "pattern": "^env:[A-Za-z_][A-Za-z0-9_]*(:.*)?$", "description": "环境变量引用 env:VAR 或 env:VAR:default（default 仅用于占位，勿放真实值）" },
+    "httpUrl": { "type": "string", "pattern": "^https?://" },
+    "modelId": { "type": "string", "minLength": 1, "description": "模型名以 models.dev 为准" },
+    "modelEntry": {
+      "description": "纯字符串（输入模态缺省 [text]）或对象形态",
+      "oneOf": [
+        { "$ref": "#/$defs/modelId" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": { "$ref": "#/$defs/modelId" },
+            "modalities": { "type": "array", "items": { "type": "string", "enum": ["text", "image", "pdf", "audio", "video"] }, "description": "输入模态（dashboard 展示与视觉路由判定）" },
+            "visionRouting": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["strategy", "target"],
+              "description": "仅 text-only 模型可配：含图请求改写到 target（target 须声明 image 模态；跨 provider 声明须一致）",
+              "properties": {
+                "strategy": { "const": "reroute" },
+                "target": { "$ref": "#/$defs/modelId" },
+                "uncertain": { "enum": ["pixels", "consumed"], "description": "工具回合未完成时的策略，缺省 pixels" }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "jobBackoff": {
+      "backoffStartSec": { "type": "number", "minimum": 0 },
+      "backoffMaxSec": { "type": "number", "minimum": 0 },
+      "timeoutSec": { "type": "number", "minimum": 0 }
+    }
+  },
+  "properties": {
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keys"],
+      "properties": {
+        "host": { "type": "string", "default": "0.0.0.0" },
+        "port": { "type": "integer", "default": 8080 },
+        "adminKeyRef": { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$", "description": "配置后启用管理端 token 鉴权" },
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "description": "客户端访问网关的 Bearer key；结构化条目按 app 归因用量",
+          "items": {
+            "oneOf": [
+              { "type": "string", "minLength": 1, "description": "共享 key（app=shared）" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key"],
+                "properties": {
+                  "key": { "type": "string", "minLength": 1, "description": "通常为 env:VAR" },
+                  "app": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "调用方 slug；与 skills 仓 distribution.json 的 endpoint id 一致时显示为 Agent" },
+                  "note": { "type": "string", "description": "客户端配置位置（只在配置里，不在页面显示）" }
+                }
+              }
+            ]
+          }
+        },
+        "timeouts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requestSec": { "type": "number", "exclusiveMinimum": 0, "default": 120 },
+            "streamSec": { "type": "number", "exclusiveMinimum": 0, "default": 300 }
+          }
+        },
+        "circuit": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "failureThreshold": { "type": "integer", "minimum": 1, "default": 3 },
+            "cooldownSec": { "type": "number", "exclusiveMinimum": 0, "default": 120 }
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "array",
+      "minItems": 1,
+      "description": "provider 目录；列表顺序 = 同一模型的 fallback 顺序",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "type", "models"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["openai", "glm", "anthropic", "codex"], "description": "openai=通用 OpenAI 兼容；glm=智谱（额度探测与 5h 激活）；codex=ChatGPT OAuth（凭据在 config/secrets/codex.json）" },
+          "displayName": { "type": "string", "description": "dashboard 卡片标题" },
+          "badge": { "type": "string", "description": "dashboard 套餐标签" },
+          "baseUrl": { "$ref": "#/$defs/httpUrl", "description": "非 codex 必填，须以 /chat/completions 结尾；codex 可选覆盖 backend" },
+          "anthropicBaseUrl": { "$ref": "#/$defs/httpUrl", "description": "可选：原生 Anthropic Messages 端点根（不含 /v1/messages）；声明后 /v1/messages 原样透传" },
+          "apiKeyRef": { "$ref": "#/$defs/envRef", "description": "非 codex 必填" },
+          "originator": { "type": "string", "description": "codex：上游遥测标识" },
+          "models": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/modelEntry" } },
+          "fallbackModelMap": {
+            "type": "object",
+            "description": "跨渠道接棒时把请求模型改写为本 provider 的模型（target 必须在本 provider 的 models 里）",
+            "additionalProperties": { "$ref": "#/$defs/modelId" }
+          }
+        }
+      }
+    },
+    "claude": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Claude 订阅只读监控 + 5h 激活 + 会话用量同步；不进路由目录",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "credentialFile": { "type": "string", "description": "只读挂载的 .credentials.json（网关永不写回）" },
+        "sessionDir": { "type": "string", "description": "Claude Code projects 目录（observed 用量同步，设备 nas）" },
+        "displayName": { "type": "string" },
+        "badge": { "type": "string" },
+        "models": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/modelId" }, "description": "展示位模型（routable:false）" }
+      }
+    },
+    "imageGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model"],
+      "properties": {
+        "provider": { "type": "string", "description": "必须是 type:codex 的 provider id" },
+        "model": { "$ref": "#/$defs/modelId", "description": "models.dev 中 type=image 的模型" }
+      }
+    },
+    "embeddings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "apiKeyRef", "workspaceIdRef", "models"],
+      "properties": {
+        "type": { "const": "dashscope" },
+        "apiKeyRef": { "$ref": "#/$defs/envRef" },
+        "workspaceIdRef": { "$ref": "#/$defs/envRef" },
+        "region": { "type": "string", "default": "cn-beijing" },
+        "models": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/modelId" } },
+        "defaultDimensions": { "type": "integer", "minimum": 1 },
+        "balanceAccessKeyIdRef": { "$ref": "#/$defs/envRef", "description": "可选：阿里云 BSS 只读 AK（卡片余额）" },
+        "balanceAccessKeySecretRef": { "$ref": "#/$defs/envRef" }
+      }
+    },
+    "jobs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "probe": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "额度探测（GLM / DeepSeek / Codex / 阿里 BSS）",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "intervalSec": { "type": "number", "minimum": 1, "default": 300 },
+            "cacheTtlSec": { "type": "number", "minimum": 0, "default": 300 },
+            "backoffStartSec": { "$ref": "#/$defs/jobBackoff/backoffStartSec" },
+            "backoffMaxSec": { "$ref": "#/$defs/jobBackoff/backoffMaxSec" },
+            "timeoutSec": { "$ref": "#/$defs/jobBackoff/timeoutSec" }
+          }
+        },
+        "activate": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "5h 窗口激活（GLM / Codex 直发，Claude 委托真 CLI 执行器）；单次最小请求、失败退避",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "delaySec": { "type": "number", "minimum": 0 },
+            "model": { "$ref": "#/$defs/modelId", "description": "启用时必填（GLM 激活模型）" },
+            "codexModel": { "$ref": "#/$defs/modelId" },
+            "claudeModel": { "$ref": "#/$defs/modelId" },
+            "maxTokens": { "type": "integer", "minimum": 1 },
+            "prompt": { "type": "string" },
+            "timeoutSec": { "$ref": "#/$defs/jobBackoff/timeoutSec" },
+            "backoffStartSec": { "$ref": "#/$defs/jobBackoff/backoffStartSec" },
+            "backoffMaxSec": { "$ref": "#/$defs/jobBackoff/backoffMaxSec" },
+            "giveUpAfterSec": { "type": "number", "minimum": 0 },
+            "skipWhenExhausted": { "type": "boolean" },
+            "claudeRunner": { "const": "host-cli" },
+            "claudeCliTimeoutSec": { "type": "number", "minimum": 1 },
+            "claudeTokenRefreshMarginSec": { "type": "number", "minimum": 0 }
+          }
+        },
+        "modelGuard": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "对照 models.dev 发现新版本/疑似退役，写入 Inbox；默认 dryRun",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "dryRun": { "type": "boolean", "default": true },
+            "intervalHours": { "type": "number", "exclusiveMinimum": 0 },
+            "threshold": { "type": "number" },
+            "notifyOnNoChange": { "type": "boolean" },
+            "modelsDevUrl": { "$ref": "#/$defs/httpUrl" }
+          }
+        }
+      }
+    },
+    "pricing": {
+      "type": "object",
+      "description": "本地定价覆盖（$/Mtok）；缺省从 models.dev 取",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "input": { "type": "number", "minimum": 0 },
+          "output": { "type": "number", "minimum": 0 },
+          "cacheRead": { "type": "number", "minimum": 0 },
+          "cacheWrite": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "notify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "smtpUrl": { "type": "string", "description": "通常为 env: 引用" },
+        "from": { "type": "string" },
+        "to": { "type": "string" }
+      }
+    },
+    "codexResetForecast": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "codex-reset.com 重置预测（纯展示）",
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "url": { "$ref": "#/$defs/httpUrl" },
+        "intervalSec": { "type": "number", "minimum": 1 }
+      }
+    },
+    "observedUsage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Mac 采集器推送的订阅用量接收（POST /internal/usage/observed）",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false },
+        "apiKeyRef": { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$" },
+        "devices": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["name", "keyRef"],
+            "properties": {
+              "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$" },
+              "keyRef": { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$" }
+            }
+          }
+        }
+      }
+    },
+    "codexUsage": { "$ref": "#/properties/observedUsage", "description": "observedUsage 的旧名（同义）" },
+    "dashboard": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "accessKeyRef": { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$", "description": "看板登录口令" },
+        "public": { "type": "boolean", "description": "token 模式下看板免登录：页面与只读数据公开；Inbox 操作仅限内网（按 X-Real-IP 判定）" }
+      }
+    },
+    "modelInbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publicUrl": { "$ref": "#/$defs/httpUrl", "description": "邮件中 Inbox 链接的网关地址" }
+      }
+    },
+    "topology": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "概览拓扑的展示分组与订阅直连声明；不影响鉴权、采集或路由",
+      "properties": {
+        "appGroups": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "label", "apps"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+              "label": { "type": "string", "minLength": 1 },
+              "icon": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "内置图标 key；未知值使用通用图标" },
+              "apps": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" } }
+            }
+          }
+        },
+        "collectors": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "label"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+              "label": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "directConnections": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["app", "device", "providerId"],
+            "properties": {
+              "app": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+              "device": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$" },
+              "providerId": { "type": "string", "minLength": 1, "description": "已配置渠道 id，或已启用订阅采集的 claude / codex-local" },
+              "collectorId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" }
+            }
+          }
+        }
+      }
+    },
+    "agentEndpoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "应用密钥页 Agent 映射来源：skills 仓 distribution.json（只读挂载）",
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "intervalSec": { "type": "integer", "minimum": 30, "default": 600 }
+      }
+    }
+  }
+}

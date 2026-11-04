@@ -1,0 +1,296 @@
+# model-gateway 配置示例（复制为 config.yaml 后填写；真实 apiKey 永不入库）
+#
+# apiKeyRef 形式：
+#   env:VAR_NAME        — 运行时从环境变量读（推荐）
+#   env:VAR_NAME:default — 环境变量缺失时的默认值（仅用于空串/占位，勿放真实 key）
+
+gateway:
+  # 网关监听
+  host: 0.0.0.0
+  port: 8080
+  # 未配 adminKeyRef 为 legacy 模式：/internal/* 继续信任私网 IP。
+  # 配置后为 token 模式：管理端与 Claude 执行器需 Bearer admin key，不再信任 IP。
+  # adminKeyRef: env:MODEL_GATEWAY_ADMIN_KEY
+  # 客户端访问网关用的 Bearer keys（支持 env: ref）。两种条目形态：
+  #   - 裸字符串 / 无 app → app=shared（共享 key，/usage 归因显示「未标记(shared)」）
+  #   - { key, app, note? } 结构化 → per-app 归因：app 写进 usage 记录的 client 维度，
+  #     /usage 页提供来源筛选与每来源趋势；app 必须用小写 slug（claude-code / notebook …），note 记录客户端配置位置
+  # key 值由部署侧生成（env 变量存真实值，不入库）；历史记录无 client → 显示「未标记」
+  keys:
+    - key: env:MODEL_GATEWAY_KEY
+      app: shared
+      note: "部署目录 .env：MODEL_GATEWAY_KEY，共享客户端的 API key 配置"
+    - key: env:GATEWAY_KEY_PI
+      app: pi
+      note: "Pi 的 models.json：网关 provider apiKey"
+    - key: env:GATEWAY_KEY_OPENCLAW
+      app: openclaw
+      note: "OpenClaw 配置：网关 provider apiKey"
+    - key: env:GATEWAY_KEY_CLAUDE_CODE
+      app: claude-code
+      note: "Claude Code settings.json：env.ANTHROPIC_AUTH_TOKEN"
+    - key: env:GATEWAY_KEY_CODEX
+      app: codex
+      note: "Codex config.toml：网关 provider 的 env_key 对应环境变量"
+    - key: env:GATEWAY_KEY_AUTOMATION
+      app: automation
+      note: "定时任务 / 脚本运行环境：网关 API key"
+    - key: env:GATEWAY_KEY_NOTEBOOK
+      app: notebook
+      note: "笔记 / 知识库应用 .env：网关 API key"
+    - key: env:GATEWAY_KEY_BOOKMARKS
+      app: bookmarks
+      note: "书签收藏应用 .env：网关 API key"
+    - key: env:GATEWAY_KEY_MY_APP
+      app: my-app
+      note: "你的业务应用 .env：网关 API key"
+    # - key: env:GATEWAY_KEY_PROBE
+    #   app: probe
+    #   note: "冒烟用，验完删除；临时 curl 请求的 Bearer key"
+  # per-attempt 超时（秒）：非流式 / 流式各自上限；超时归 timeout 类失败，
+  # 可重试切链但不计入熔断（上游慢生成≠不可达）。缺省 120 / 300。
+  # streamSec 是单次尝试的流式总时长封顶：长输出任务卡（task-dispatch 派给 GLM 的
+  # 大卡）生成可超 5 分钟，2026-11-04 曾按默认 300s 被整齐掐断成大量假
+  # client_abort；600s 与客户端上限对齐（run-card.sh API_TIMEOUT_MS=600000）。
+  timeouts:
+    requestSec: 120
+    streamSec: 600
+  # provider 熔断器：连续 N 次「请求路径」retriable 失败（网络/限流/5xx）→
+  # 冷却期内降级到链尾（不移除，单渠道链照发）；冷却期满半开试探，成功恢复。
+  # 探测（quota probe）失败不计入。缺省 enabled / 3 / 120。
+  circuit:
+    enabled: true
+    failureThreshold: 3
+    cooldownSec: 120
+
+# provider 目录：fallback 按列表顺序
+providers:
+  # 可选展示字段（仅 dashboard 使用，不影响代理）：
+  #   displayName: 卡片标题（缺省用 id）
+  #   badge: 套餐标签，如 "Coding Plan · Max"
+  # models 条目支持两种写法：
+  #   - glm-5.3                                  （纯字符串，模态缺省 [text]）
+  #   - id: glm-5.3
+  #     modalities:                              （对象形态，声明输入模态供 dashboard 展示）
+  #       - text
+  #       - image
+  #   对象形态可选 visionRouting（v1 视觉路由，reroute 策略）：text-only 模型收到
+  #   含图请求时改写到视觉 target 模型（历史区图片替换为占位文本，新区图片保留
+  #   像素；仅历史图时只占位不改模型）。校验：strategy 仅支持 reroute；target 须
+  #   在目录中且声明 image 模态；仅 text-only 模型可配；同一模型跨 provider 声明
+  #   必须一致。回滚 = 删除该块。
+  #   可选 uncertain（工具回合未完成时的策略，v1.1）：
+  #     pixels（默认，v1 行为）——任何位置的图一律保像素、全量改写；
+  #     consumed —— 图后有 assistant 应答 = 已识别 → 占位，只保未消费图像素；
+  #     全部已消费 → 只占位、模型不动。适合编码代理贴图后长工具循环场景
+  #     （避免每请求重发已识别图与整轮改写）。
+  - id: glm-primary
+    displayName: 智谱 1
+    type: glm            # type: glm 触发官方额度探测与窗口激活
+    badge: Coding Plan · Max
+    baseUrl: https://open.bigmodel.cn/api/coding/paas/v4/chat/completions
+    # 可选：原生 Anthropic Messages 端点根（Claude Code 等客户端经 /v1/messages 流式+工具透传）
+    anthropicBaseUrl: https://open.bigmodel.cn/api/anthropic
+    apiKeyRef: env:GLM_API_KEY
+    models:
+      - id: glm-5.3
+        modalities:
+          - text
+        visionRouting:
+          strategy: reroute
+          target: glm-5.3-flash
+          uncertain: consumed   # 工具循环中已识别图不再重发像素；删除此行回退 v1
+      - id: glm-5.3-flash
+        modalities:
+          - text
+          - image
+
+  - id: glm-backup
+    displayName: 智谱 2
+    type: glm
+    badge: Coding Plan · Max
+    baseUrl: https://open.bigmodel.cn/api/coding/paas/v4/chat/completions
+    # 可选：原生 Anthropic Messages 端点根（Claude Code 等客户端经 /v1/messages 流式+工具透传）
+    anthropicBaseUrl: https://open.bigmodel.cn/api/anthropic
+    apiKeyRef: env:GLM_BACKUP_API_KEY
+    models:
+      - glm-5.3          # visionRouting 是模型级配置：任一声明方即生效；多处声明须完全一致
+      - id: glm-5.3-flash
+        modalities:
+          - text
+          - image
+
+  - id: deepseek
+    displayName: DeepSeek
+    type: openai         # type: openai = 通用 OpenAI 兼容（无额度探测）
+    badge: API · 按量付费
+    baseUrl: https://api.deepseek.com/v1/chat/completions
+    apiKeyRef: env:DEEPSEEK_API_KEY
+    # 显式跨模型备用；DeepSeek 卡片只展示自己的模型，代理请求自动改写 model。
+    fallbackModelMap:
+      glm-5.3-flash: deepseek-flash
+    models:
+      - id: deepseek-flash
+        modalities:
+          - text
+          - image
+      - deepseek-v4-pro
+
+  - id: codex            # type: codex = GPT (ChatGPT OAuth)；凭据在 config/secrets/codex.json
+    displayName: OpenAI
+    type: codex          # 导入：scripts/import-from-pi.sh；token 自动刷新/401 自愈见 docs/codex.md
+    badge: ChatGPT Plus
+    originator: pi       # 上游遥测标识，对齐 pi 原生流量指纹（省略则用默认 model-gateway）
+    models:              # baseUrl 可选覆盖 backend（默认 https://chatgpt.com/backend-api）
+      - id: gpt-6-sol
+        modalities:
+          - text
+          - image
+          - pdf
+      - id: gpt-6-luna
+        modalities:
+          - text
+          - image
+          - pdf
+
+# Claude 消费级订阅（Pro/Max）只读监控 + 5h 窗口激活（可选）。
+# - 网关永不刷新 token：凭据文件由 Claude Code CLI 在别处轮换，挂载只读即可；
+#   access token 过期时额度探测报错，下一次 Claude Code 运行刷新后自愈
+#   （激活路径由真 CLI 执行器发出，token 刷新由 CLI 自己完成）。
+# - 不进路由 catalog：claude 模型不可经 /v1/chat/completions 寻址；
+#   本节只提供额度探测（dashboard 卡片）、5h 窗口激活、Claude Code 会话用量同步。
+# - 零密钥：credentialFile 只读挂载 .credentials.json，代码/配置/仓库均无真实凭据。
+# claude:
+#   enabled: true
+#   credentialFile: /app/claude-config/.credentials.json  # 容器内路径（compose 只读挂载）
+#   sessionDir: /app/claude-config/projects                # Claude Code 会话 jsonl 根目录
+#   displayName: Claude                                    # dashboard 卡片名（可选）
+#   badge: Pro                                             # 卡片徽标（可选）
+#   models:                                               # 展示位模型（可选）：dashboard 卡片展开
+#     - claude-opus-5-5                                    # + /v1/models routable:false 露出；
+#     - claude-sonnet-5-5                                  # 无调用链，不影响路由
+#     - claude-haiku-5-5
+
+# 应用密钥页 Agent 映射（可选）：只读 skills 仓 distribution.json 的 endpoints。
+# endpoint id 与 gateway.keys[].app 对应；mac-symlink → 本地，nas-dist-dir → 云端。
+# 未配置 → 页面不分 Agent 组。compose 只读挂载 NAS 上 skills checkout 的该文件。
+# agentEndpoints:
+#   file: /app/skills/distribution.json
+#   intervalSec: 600        # 重读周期（≥30）；读取失败保留上次结果并在页面提示
+
+# 概览拓扑的展示元数据（可选）：不影响鉴权、路由或采集行为。
+# 分组成员使用 gateway.keys[].app 或下方声明的直连 app；每个 app 只能归入一个组。
+# 未配置的列表默认为空。示例（按实际已启用渠道填写；直连 app 无需持有网关密钥）：
+# topology:
+#   appGroups:
+#     - id: knowledge
+#       label: 知识应用
+#       icon: knowledge       # 内置图标 key；未知 key 降级为通用图标
+#       apps:
+#         - notebook
+#         - bookmarks
+#   collectors:
+#     - id: mac-sync
+#       label: Mac 用量采集
+#   directConnections:
+#     - app: claude-code
+#       device: mac
+#       providerId: claude    # 需启用 claude 监控或 observedUsage
+#       collectorId: mac-sync
+#     - app: codex
+#       device: mac
+#       providerId: codex-local # 对应面板 Codex 订阅；需启用 observedUsage 或 Codex provider
+#       collectorId: mac-sync
+
+# 后台任务
+# 文本向量（可选）：POST /v1/embeddings → 阿里百炼 DashScope。未配置则路由 404。
+# 上游优先原生接口（支持扩展字段 text_type: query|document），网络错误/5xx 降级兼容模式。
+# 单次最多 10 条，网关自动分批顺序请求。
+embeddings:
+  type: dashscope
+  apiKeyRef: env:DASHSCOPE_API_KEY
+  workspaceIdRef: env:DASHSCOPE_WORKSPACE_ID   # 百炼「业务空间详情」页
+  region: cn-beijing
+  models:
+    - text-embedding-v4
+  defaultDimensions: 1024
+
+jobs:
+  # 后台用量探测：GLM / DeepSeek 余额 / Codex wham/usage
+  probe:
+    enabled: true
+    intervalSec: 300      # 周期探测（OLP 模式）
+    cacheTtlSec: 300      # 结果缓存
+    backoffStartSec: 60   # 失败指数退避起点
+    backoffMaxSec: 3600   # 退避上限
+    timeoutSec: 15
+
+  # 5h 窗口激活（GLM + Codex 直发 / Claude 委托真 CLI）：重置后发 1 次最小请求锚定
+  # 下一窗口；失败在退避期限内重试。
+  # claude 执行方式（2026-10-19 重实现，两条旧结论作废）：
+  #  ① 订阅 OAuth /v1/messages 有客户端指纹门控，网关进程内直发一律 429
+  #    （2026-10-14 实测：同 token/IP 同分钟，真 CLI 200、裸请求 429）→ 激活
+  #    改由 compose sidecar claude-activator（真 Claude Code CLI）经
+  #    /internal/activator/claude/claim|result 领取执行，claudeRunner 固定 host-cli。
+  #  ② 「Claude 5h 窗口滚动、闲置零损失、无需激活」已推翻：闲置只会推迟下一
+  #    窗口开启，背靠背锚定才有最大吞吐（与 GLM 同理）。
+  activate:
+    enabled: true
+    model: glm-5.3-flash   # GLM 激活用模型（目录中可用最小/最便宜模型）
+    codexModel: gpt-6-luna  # Codex(ChatGPT) 激活用模型；不配置则 Codex 不激活
+    claudeModel: claude-haiku-5-5  # Claude 订阅激活用模型；不配置则 claude 不激活
+    claudeRunner: host-cli  # claude 激活执行方式（唯一支持值；直发已被指纹门控证死）
+    claudeCliTimeoutSec: 180  # 真 CLI 执行器超时（冷启动含插件装载）
+    delaySec: 60            # 重置后窗口内的检查间隔兼延迟上限
+    skipWhenExhausted: true  # 周/月额度用完 → 跳过激活（不发请求、不告警），重置后自动恢复
+    maxTokens: 200
+    timeoutSec: 30
+    backoffStartSec: 120
+    backoffMaxSec: 3600
+
+  # 模型自动升级守护（models.dev 发现 + 价格护栏 + 退役检测；落地只改本目录）
+  modelGuard:
+    enabled: false
+    dryRun: true            # 后台只提建议；通过 Inbox 显式处理
+    intervalHours: 24       # 巡检周期
+    threshold: 1.3          # 价格涨幅参考（超限时提示人工评估）
+    # modelsDevUrl: https://models.dev/api.json
+
+# SMTP 通知（复用 watchtower 通知 URL 模式；凭据运行时读 env，不入库）
+notify:
+  smtpUrl: env:WATCHTOWER_NOTIFICATION_URL   # smtp://user:pass@host:port/?... 或留空禁用
+  # 可选：覆盖发件人/收件人（取决于 URL 形态，未设置则用 URL 自带参数）
+  from: gateway@example.com
+  to: admin@example.com
+
+# 使用统计定价覆盖（可选；单位 $/Mtok）。缺省从 models.dev 自动取价。
+# 仅在 models.dev 无该模型（如网关别名）或价格不符时才需要配置。
+# pricing:
+#   gpt-6-sol:
+#     input: 1.25
+#     output: 10
+#     cacheRead: 0.125
+#     cacheWrite: 1.25
+
+# 模型收件箱：邮件提供的页面入口；设为实际网关访问地址。
+modelInbox:
+  publicUrl: https://gateway.example.com
+
+# 看板口令：配置后页面需登录；cookie 只授权内部 GET 与 Inbox POST。
+# token 模式未配口令时，页面仅允许 loopback 访问。
+# public: true 时免登录：页面与只读数据公开，Inbox 操作只接受内网请求
+# （反代后面按代理写入的 X-Real-IP 判定）；管理、激活、采集接口仍需各自的 key。
+# dashboard:
+#   accessKeyRef: env:DASHBOARD_ACCESS_KEY
+#   public: false
+
+# Mac 采集器推送的订阅用量接收（Codex + Claude Code，POST /internal/usage/observed）；
+# 此 key 不提供模型调用或配置管理权限。旧名 codexUsage 仍然有效。
+observedUsage:
+  enabled: false
+  apiKeyRef: env:USAGE_SYNC_KEY
+  # 设备 token 只允许推送 observed 用量；token 模式不要求私网 IP。
+  # 命中 token 后由网关绑定设备名，覆盖上传的 device；旧 apiKeyRef 不绑定设备。
+  # devices:
+  #   - name: mac
+  #     keyRef: env:USAGE_SYNC_MAC_KEY

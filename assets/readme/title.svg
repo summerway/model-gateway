@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 340" width="1200" height="340" role="img" aria-labelledby="t d">
+  <title id="t">model-gateway</title>
+  <desc id="d">自托管 LLM 网关：多个客户端经一个网关接入多个模型渠道，额度满或出错时沿 fallback 链自动接力。</desc>
+  <style>
+    .card { fill: #f6f8fb; stroke: #e3e8ef; }
+    .ink { fill: #0f172a; }
+    .sub { fill: #334155; }
+    .meta { fill: #64748b; }
+    .pill { fill: #ffffff; stroke: #d6dde8; }
+    .pill-t { fill: #1e293b; }
+    .wire { stroke: #9fb4d3; }
+    .relay { stroke: #e0703a; }
+    .relay-t { fill: #c2551f; }
+    .hot { stroke: #3b82f6; }
+    .fail { stroke: #ef4444; }
+    @media (prefers-color-scheme: dark) {
+      .card { fill: #121821; stroke: #263142; }
+      .ink { fill: #f1f5f9; }
+      .sub { fill: #cbd5e1; }
+      .meta { fill: #8b9bb0; }
+      .pill { fill: #1a2230; stroke: #2e3a4d; }
+      .pill-t { fill: #e2e8f0; }
+      .wire { stroke: #4a5d7a; }
+      .relay { stroke: #f08a50; }
+      .relay-t { fill: #f59e6b; }
+    }
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+  <defs>
+    <linearGradient id="arch" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f6fe4"/>
+      <stop offset="1" stop-color="#8ec5ff"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="card" x="1" y="1" width="1198" height="338" rx="20" stroke-width="2"/>
+
+  <!-- 左侧：名称与一句话价值 -->
+  <text class="meta mono" x="56" y="84" font-size="18" letter-spacing="1.5">SELF-HOSTED LLM GATEWAY</text>
+  <text class="ink" x="54" y="152" font-size="60" font-weight="700" letter-spacing="-1">model-gateway</text>
+  <text class="sub" x="56" y="204" font-size="25">一个地址接入你的 AI 订阅与 API，</text>
+  <text class="sub" x="56" y="240" font-size="25">额度用尽或出错时自动接力。</text>
+  <text class="meta mono" x="56" y="292" font-size="18">OpenAI 兼容 · Anthropic 透传 · 零运行时依赖</text>
+
+  <!-- 右侧：客户端 → 网关 → 渠道，含一条 fallback 接力 -->
+  <g fill="none" stroke-width="2.5" stroke-linecap="round">
+    <path class="wire" d="M770 100 C 820 100, 830 170, 878 170"/>
+    <path class="wire" d="M770 170 L 878 170"/>
+    <path class="wire" d="M770 240 C 820 240, 830 170, 878 170"/>
+    <path class="hot" d="M942 170 C 990 170, 990 100, 1030 100"/>
+    <path class="wire" d="M942 170 L 1030 170"/>
+    <path class="wire" d="M942 170 C 990 170, 990 240, 1030 240"/>
+    <path class="relay" d="M1150 112 C 1182 140, 1182 214, 1150 236" stroke-dasharray="6 6"/>
+  </g>
+  <path class="relay" d="M1146 226 l4 10 l-11 -1" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text class="relay-t" x="1160" y="180" font-size="18" text-anchor="middle" transform="rotate(90 1160 180)" dy="-14">接力</text>
+
+  <!-- 客户端 -->
+  <g>
+    <rect class="pill" x="626" y="80" width="144" height="40" rx="20" stroke-width="1.5"/>
+    <text class="pill-t" x="698" y="107" font-size="19" text-anchor="middle">Claude Code</text>
+    <rect class="pill" x="626" y="150" width="144" height="40" rx="20" stroke-width="1.5"/>
+    <text class="pill-t" x="698" y="177" font-size="19" text-anchor="middle">Codex</text>
+    <rect class="pill" x="626" y="220" width="144" height="40" rx="20" stroke-width="1.5"/>
+    <text class="pill-t" x="698" y="247" font-size="19" text-anchor="middle">你的应用</text>
+  </g>
+
+  <!-- 网关拱形标 -->
+  <path d="M882 196 V 168 a 28 30 0 0 1 56 0 V 196 h -17 V 172 a 11 12 0 0 0 -22 0 V 196 Z" fill="url(#arch)"/>
+
+  <!-- 渠道 -->
+  <g>
+    <rect class="pill" x="1030" y="80" width="118" height="40" rx="20" stroke-width="1.5"/>
+    <text class="pill-t" x="1089" y="107" font-size="19" text-anchor="middle">GLM</text>
+    <line class="fail" x1="1124" y1="92" x2="1136" y2="108" stroke-width="2.5" stroke-linecap="round"/>
+    <line class="fail" x1="1136" y1="92" x2="1124" y2="108" stroke-width="2.5" stroke-linecap="round"/>
+    <rect class="pill" x="1030" y="150" width="118" height="40" rx="20" stroke-width="1.5"/>
+    <text class="pill-t" x="1089" y="177" font-size="19" text-anchor="middle">Codex</text>
+    <rect class="pill" x="1030" y="220" width="118" height="40" rx="20" stroke-width="1.5"/>
+    <text class="pill-t" x="1089" y="247" font-size="19" text-anchor="middle">DeepSeek</text>
+  </g>
+</svg>

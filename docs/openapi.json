@@ -1,0 +1,664 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "model-gateway Admin API",
+    "version": "0.1.0",
+    "description": "Preview configuration changes, confirm the diff, then apply. Only providers reload immediately. Changes expire after fifteen minutes. YAML must be migrated before apply."
+  },
+  "servers": [
+    {
+      "url": "/admin/v1"
+    }
+  ],
+  "security": [
+    {
+      "adminBearer": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "adminBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "gateway.adminKeyRef. Dashboard cookies are not accepted. Legacy mode returns admin_key_required."
+      },
+      "deviceBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "observedUsage.devices keyRef or collector apiKeyRef. Only usage/observed accepts this credential; device tokens bind device name."
+      }
+    },
+    "schemas": {
+      "Config": {
+        "$ref": "../config/config.schema.json"
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "details"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "patch_invalid, patch_test_failed, config_invalid, secret_literal_forbidden, change_not_found, config_changed, config_readonly, reload_failed, inbox_error, unauthorized, forbidden, admin_key_required or not_found."
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      },
+      "PatchOperation": {
+        "type": "object",
+        "required": [
+          "op",
+          "path"
+        ],
+        "properties": {
+          "op": {
+            "enum": [
+              "add",
+              "remove",
+              "replace",
+              "move",
+              "copy",
+              "test"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "RFC 6901 JSON Pointer; ~0 and ~1 are decoded. Array add accepts -."
+          },
+          "from": {
+            "type": "string",
+            "description": "Required for move and copy."
+          },
+          "value": {
+            "description": "Required for add, replace and test. Secrets must be env references."
+          }
+        }
+      },
+      "Preview": {
+        "type": "object",
+        "required": [
+          "changeId",
+          "diff",
+          "warnings",
+          "restartRequired",
+          "expiresAt"
+        ],
+        "properties": {
+          "changeId": {
+            "type": "string"
+          },
+          "diff": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "before": {
+                  "description": "Previous value, redacted where necessary; null for additions."
+                },
+                "after": {
+                  "description": "Proposed value; null for removals."
+                }
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "restartRequired": {
+            "type": "boolean"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ObservedBatch": {
+        "type": "object",
+        "required": [
+          "source",
+          "events"
+        ],
+        "properties": {
+          "source": {
+            "enum": [
+              "codex",
+              "claude-code"
+            ]
+          },
+          "device": {
+            "type": "string",
+            "description": "Overridden by a device token's bound name."
+          },
+          "events": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "type": "object",
+              "description": "Idempotent subscription event. Official subscription models only; served gateway traffic is excluded.",
+              "required": [
+                "id",
+                "ts",
+                "model",
+                "usage"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "ts": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "client": {
+                  "type": "string"
+                },
+                "usage": {
+                  "type": "object",
+                  "properties": {
+                    "input": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "output": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cacheRead": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "cacheWrite": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Structured Admin API error. Conflicts include stale file hash and read-only YAML; config_readonly details.hint gives npm run config:migrate.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Object": {
+        "description": "Runtime snapshot or operation result.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/openapi.json": {
+      "get": {
+        "summary": "Public OpenAPI 3.1 contract; no credentials required.",
+        "security": [],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          }
+        }
+      }
+    },
+    "/usage/observed": {
+      "post": {
+        "summary": "Import subscription observations using the same receiver and idempotency rules as internal usage observed.",
+        "security": [
+          {
+            "adminBearer": []
+          },
+          {
+            "deviceBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservedBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "accepted is batch size; imported is count of inserted or updated events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "integer"
+                    },
+                    "imported": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/config/changes": {
+      "post": {
+        "summary": "Preview a detached RFC 6902 patch against the file, validate, and retain for fifteen minutes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "patch"
+                ],
+                "properties": {
+                  "patch": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/PatchOperation"
+                    }
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Review diff before applying changeId. restartRequired is true for paths outside providers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Preview"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/config/changes/{id}/apply": {
+      "post": {
+        "summary": "Check file hash, back up, atomically write JSON, reload providers. Reload failure restores old file. Serialized with Inbox writes.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok, changeId, backup filename and restartRequired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/config/rollback": {
+      "post": {
+        "summary": "Restore the most recent Admin API backup in this process. Reject if file changed since apply.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/reload": {
+      "post": {
+        "summary": "Reload providers only and record admin_reload. Other sections take effect on restart.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/inbox/{id}/{action}": {
+      "post": {
+        "summary": "Preview and apply an Inbox action; returns Inbox snapshot. Inbox errors retain HTTP status with code inbox_error.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "add",
+                "replace",
+                "remove",
+                "dismiss"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/inbox/rollback": {
+      "post": {
+        "summary": "Roll back the latest eligible Inbox action using Inbox's existing checks.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/status": {
+      "get": {
+        "summary": "Version, uptime in seconds, auth mode, configPath, format and writable.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/providers": {
+      "get": {
+        "summary": "Provider dashboard snapshots including models, chains, health, quotas and runtime state.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "summary": "OpenAI model list with providers and routable flag, including display-only Claude models.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/quota": {
+      "get": {
+        "summary": "Cached quota snapshots keyed by provider; never initiates probes.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/usage": {
+      "get": {
+        "summary": "Usage snapshot, or daily rows when groupBy or device is supplied. Observed request count, latency and success rate are unavailable.",
+        "parameters": [
+          {
+            "name": "range",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "today",
+              "enum": [
+                "today",
+                "24h",
+                "7d",
+                "30d"
+              ]
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "description": "Comma-separated dimensions day, kind, client, provider, model, device. Returns from, to and aggregated rows.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "served",
+                "observed"
+              ]
+            }
+          },
+          {
+            "name": "device",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "client",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "provider",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Daily query start, inclusive; overrides range start.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Daily query end, inclusive; overrides range end.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Recent events, including admin_config_applied, admin_config_rollback and admin_reload.",
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/inbox": {
+      "get": {
+        "summary": "Inbox snapshot with pending count, items, provider labels and rollback availability.",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Object"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/config": {
+      "get": {
+        "summary": "Effective config and file metadata. Ref fields retain env references; literal gateway keys are masked. Non-provider changes require restart.",
+        "responses": {
+          "200": {
+            "description": "Effective configuration; secret literals are redacted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "config": {
+                      "$ref": "#/components/schemas/Config"
+                    },
+                    "configPath": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string"
+                    },
+                    "writable": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,287 @@
+/* site/views.css — MG22 八视图导览。样式复刻线上控制台（src/dashboard/console.html），
+   只在 .mgv 作用域内新增 token（双暗色入口与页面一致）；页面级 token 直接引用。
+   所有类名带 mgv- 前缀，避免与产品页全局类（.card/.btn 等）冲突。 */
+
+.mgv {
+  /* 控制台数据/状态色（页面 token 未覆盖的部分，在此作用域内定义） */
+  --good:#0ca30c; --good-tx:#006300; --good-wash:#e7f4e9;
+  --warn:#fab219; --warn-tx:#7a4f00; --warn-wash:#fff4dc;
+  --crit:#d03b3b; --crit-tx:#b02a2a; --crit-wash:#fdeeee;
+  --c1:#4477aa; --c2:#ee6677; --c3:#228833; --c4:#ccbb44; --c5:#66ccee; --c6:#aa3377; --c7:#dd8b3a; --c8:#3148a8; --c9:#8a6d0f; --c10:#00876c; --c-other:#a3a199;
+  --tok-in:#2a78d6; --tok-out:#0b950b; --tok-cc:#bd7d00; --tok-cr:#8e7cc3; --tok-cost:#cc3131;
+  --meter:#2a78d6; --meter-track:#e7e6e0;
+  --grid:#e8e7e1; --base:#c3c2b7;
+  --tip-bg:#20221f; --tip-fg:#fcfcfb;
+  --shadow:0 1px 2px rgba(11,11,11,.04);
+
+  display:grid; grid-template-columns:264px minmax(0,1fr); gap:28px; align-items:start;
+  margin-top:40px; font:14px/1.5 var(--font-body); color:var(--ink);
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mgv {
+  --good:#0ca30c; --good-tx:#3fc455; --good-wash:#173020;
+  --warn:#fab219; --warn-tx:#f0c66e; --warn-wash:#382d14;
+  --crit:#d03b3b; --crit-tx:#f07272; --crit-wash:#3c2020;
+  --c1:#6c9bd2; --c2:#f28a97; --c3:#3fae55; --c4:#d9c766; --c5:#7fd6ef; --c6:#c57bb0; --c7:#e5a45c; --c8:#7285e8; --c9:#c9a84c; --c10:#3fbf9d; --c-other:#6c6e66;
+  --tok-in:#3987e5; --tok-out:#3fc455; --tok-cc:#f5b02e; --tok-cr:#b3a1f0; --tok-cost:#f06565;
+  --meter:#3987e5; --meter-track:#30332d;
+  --grid:#2b2e2a; --base:#41443e;
+  --tip-bg:#343831; --tip-fg:#f3f4ef;
+  --shadow:none;
+}}
+:root[data-theme="dark"] .mgv {
+  --good:#0ca30c; --good-tx:#3fc455; --good-wash:#173020;
+  --warn:#fab219; --warn-tx:#f0c66e; --warn-wash:#382d14;
+  --crit:#d03b3b; --crit-tx:#f07272; --crit-wash:#3c2020;
+  --c1:#6c9bd2; --c2:#f28a97; --c3:#3fae55; --c4:#d9c766; --c5:#7fd6ef; --c6:#c57bb0; --c7:#e5a45c; --c8:#7285e8; --c9:#c9a84c; --c10:#3fbf9d; --c-other:#6c6e66;
+  --tok-in:#3987e5; --tok-out:#3fc455; --tok-cc:#f5b02e; --tok-cr:#b3a1f0; --tok-cost:#f06565;
+  --meter:#3987e5; --meter-track:#30332d;
+  --grid:#2b2e2a; --base:#41443e;
+  --tip-bg:#343831; --tip-fg:#f3f4ef;
+  --shadow:none;
+}
+
+.mgv, .mgv *, .mgv *::before, .mgv *::after { box-sizing:border-box; }
+.mgv-inner { display:contents; } /* 内层包装：让列表/窗口成为 .mgv 网格项，fixed 定位的提示条不受布局影响 */
+.mgv button { font:inherit; color:inherit; }
+.mgv :focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:4px; }
+.mgv .num { font-variant-numeric:tabular-nums; }
+
+/* ── 左侧视图列表（01–08）── */
+.mgv-list { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+.mgv-item > button {
+  display:grid; grid-template-columns:30px minmax(0,1fr); grid-template-areas:"num title" "num desc";
+  gap:1px 10px; width:100%; text-align:left; border:1px solid transparent; border-radius:12px;
+  background:transparent; padding:10px 12px; cursor:pointer;
+}
+.mgv-item > button:hover { background:var(--accent-wash); }
+.mgv-item > button[aria-pressed="true"] { background:var(--surface); border-color:var(--hair); box-shadow:var(--shadow); }
+.mgv-num { grid-area:num; font-family:var(--font-mono); font-size:12px; color:var(--muted); padding-top:3px; }
+.mgv-item > button[aria-pressed="true"] .mgv-num { color:var(--accent); font-weight:600; }
+.mgv-title { grid-area:title; font-weight:600; }
+.mgv-desc { grid-area:desc; font-size:12px; color:var(--muted); }
+
+/* ── 右侧模拟窗口 ── */
+.mgv-win { border:1px solid var(--hair); border-radius:14px; background:var(--page); box-shadow:var(--shadow); overflow:hidden; min-width:0; }
+.mgv-bar { display:flex; align-items:center; gap:12px; padding:9px 14px; background:var(--sunk); border-bottom:1px solid var(--hair); }
+.mgv-brand { display:flex; align-items:center; gap:7px; font-family:var(--font-mono); font-size:13px; color:var(--ink); white-space:nowrap; }
+.mgv-brand img { width:18px; height:18px; border-radius:4px; flex:none; display:block; }
+.mgv-nav { display:flex; gap:2px; overflow-x:auto; scrollbar-width:none; }
+.mgv-nav button { border:0; background:transparent; padding:5px 10px; border-radius:8px; font-size:13px; color:var(--ink-2); cursor:pointer; white-space:nowrap; }
+.mgv-nav button:hover { background:var(--accent-wash); color:var(--ink); }
+.mgv-nav button[aria-current="true"] { color:var(--ink); font-weight:600; background:var(--surface); box-shadow:inset 0 0 0 1px var(--hair); }
+.mgv-nav button:disabled { color:var(--muted); opacity:.55; cursor:default; }
+.mgv-nav button:disabled:hover { background:transparent; color:var(--muted); }
+
+.mgv-tabs { display:flex; gap:2px; border-bottom:1px solid var(--hair); padding:0 14px; overflow-x:auto; scrollbar-width:none; position:relative; }
+.mgv-tab { border:0; background:none; font-size:13px; color:var(--ink-2); padding:9px 12px 11px; margin-bottom:-1px; cursor:pointer; white-space:nowrap; position:relative; z-index:1; }
+.mgv-tab:hover { color:var(--ink); }
+.mgv-tab[aria-current="true"] { color:var(--ink); font-weight:600; }
+
+/* 二级标签/分段控件共用的滑动指示条 */
+.mgv-pill { position:absolute; left:0; top:0; bottom:0; z-index:0; pointer-events:none; border-radius:8px; transition:transform .3s cubic-bezier(.3,.7,.3,1), width .3s cubic-bezier(.3,.7,.3,1); }
+.mgv-tabs > .mgv-pill { background:var(--accent); top:auto; bottom:0; height:2px; border-radius:2px; }
+.mgv-seg > .mgv-pill { background:var(--surface); box-shadow:0 1px 2px rgba(0,0,0,.12); border-radius:6px; top:2px; bottom:2px; }
+
+.mgv-body { padding:16px; min-height:520px; min-width:0; }
+.mgv-view { display:grid; gap:16px; }
+.mgv-view.mgv-fade { animation:mgv-fade .15s ease; }
+@keyframes mgv-fade { from { opacity:0; transform:translateY(4px); } }
+
+/* ── 控件 ── */
+.mgv-controls { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.mgv-seg { display:inline-flex; background:var(--meter-track); border-radius:8px; padding:2px; gap:2px; position:relative; }
+.mgv-seg button { border:0; background:transparent; padding:4px 10px; border-radius:6px; cursor:pointer; color:var(--ink-2); font-size:13px; white-space:nowrap; position:relative; z-index:1; }
+.mgv-seg button[aria-pressed="true"] { color:var(--ink); font-weight:600; }
+.mgv select { font:inherit; font-size:12px; min-height:28px; max-width:100%; border:1px solid var(--hair); border-radius:6px; padding:4px 8px; background:var(--surface); color:var(--ink); line-height:1.2; cursor:pointer; }
+.mgv select:hover { border-color:color-mix(in srgb,var(--accent) 55%,var(--hair)); }
+
+/* ── 卡片 ── */
+.mgv-card { background:var(--surface); border:1px solid var(--hair); border-radius:12px; padding:16px 18px; box-shadow:var(--shadow); min-width:0; }
+.mgv-card-h { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.mgv-card-h h2, .mgv-card-h h3 { margin:0; font-size:15px; font-weight:650; }
+.mgv-meta { color:var(--muted); font-size:12px; }
+
+/* ── 状态 chip ── */
+.mgv-chip { display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:550; padding:1px 8px; border-radius:999px; white-space:nowrap; background:var(--meter-track); color:var(--ink-2); }
+.mgv-chip.good { background:var(--good-wash); color:var(--good-tx); }
+.mgv-chip.warn { background:var(--warn-wash); color:var(--warn-tx); }
+.mgv-chip.crit { background:var(--crit-wash); color:var(--crit-tx); }
+.mgv-chip.info { background:var(--accent-wash); color:var(--accent); }
+.mgv-chip.ghost { background:transparent; box-shadow:inset 0 0 0 1px var(--hair); }
+
+/* ── 额度卡（视图 01）── */
+.mgv-qgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap:16px; }
+.mgv-quota { display:grid; gap:12px; grid-template-rows:auto 1fr auto; }
+.mgv-q-head { display:flex; align-items:center; gap:11px; }
+.mgv-q-head .prov-logo { width:32px; height:32px; border-radius:9px; }
+.mgv-q-name { font-weight:600; }
+.mgv-q-plan { font-size:12px; color:var(--muted); }
+.mgv-q-head .mgv-chip { margin-left:auto; align-self:flex-start; margin-top:1px; }
+.mgv-q-body { min-height:112px; display:grid; gap:12px; align-content:stretch; }
+.mgv-q-foot { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--muted); border-top:1px solid var(--hair); padding-top:10px; }
+
+/* ── 进度条 ── */
+.mgv-meter { display:grid; gap:4px; }
+.mgv-meter-row { display:flex; justify-content:space-between; font-size:13px; gap:8px; }
+.mgv-meter-row .pct { font-weight:600; }
+.mgv-meter-track { height:8px; background:var(--meter-track); border-radius:4px; overflow:hidden; }
+.mgv-meter-fill { height:100%; width:100%; border-radius:4px; background:var(--meter); transform-origin:left center; transform:scaleX(0); transition:transform .9s cubic-bezier(.22,.9,.24,1), background-color .3s; }
+.mgv-meter-fill.warn { background:var(--warn); } .mgv-meter-fill.crit { background:var(--crit); }
+.mgv-meter-foot { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:8px; }
+.mgv-meter-foot .lvl { font-weight:600; }
+.mgv-meter-foot .lvl.warn { color:var(--warn-tx); } .mgv-meter-foot .lvl.crit { color:var(--crit-tx); }
+
+/* ── 今日网关 5 格（连体网格）── */
+.mgv-tiles { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:1px; background:var(--hair); border:1px solid var(--hair); border-radius:12px; overflow:hidden; }
+.mgv-tile { background:var(--surface); padding:14px 16px; min-width:0; }
+.mgv-tile .k { font-size:12px; color:var(--muted); }
+.mgv-tile .v { font-size:20px; font-weight:650; margin-top:2px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.mgv-tile .v .mgv-chip { vertical-align:2px; }
+.mgv-tile .s { font-size:12px; color:var(--ink-2); margin-top:2px; }
+@media (max-width:1000px) { .mgv-tiles { grid-template-columns:repeat(3, minmax(0,1fr)); } }
+@media (max-width:560px) { .mgv-tiles { grid-template-columns:1fr 1fr; } .mgv-tile:last-child:nth-child(odd) { grid-column:1 / -1; } }
+
+/* ── 表格 ── */
+.mgv-tblwrap { overflow-x:auto; margin:0 -4px; }
+.mgv table.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.mgv .tbl th { text-align:left; font-weight:550; color:var(--muted); font-size:12px; padding:6px 8px; border-bottom:1px solid var(--hair); white-space:nowrap; }
+.mgv .tbl td { padding:9px 8px; border-bottom:1px solid var(--hair); vertical-align:middle; }
+.mgv .tbl tr:last-child td { border-bottom:0; }
+.mgv .tbl .r { text-align:right; }
+.mgv .tbl tbody tr.mgv-row { cursor:pointer; }
+.mgv .tbl tbody tr.mgv-row:hover td { background:var(--accent-wash); }
+.mgv .tbl tr.mgv-detail td { background:var(--page); padding:14px 16px; }
+.mgv .tbl tr.hl td { background:var(--accent-wash); }
+.mgv-name { display:flex; align-items:center; gap:8px; min-width:0; }
+.mgv-name .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mgv-dot { width:10px; height:10px; border-radius:3px; display:inline-block; flex:none; }
+.mgv-caret { width:14px; height:14px; color:var(--muted); transition:transform .2s; flex:none; }
+tr.mgv-open .mgv-caret { transform:rotate(90deg); }
+.mgv .mono { font-family:var(--font-mono); font-size:12.5px; }
+
+/* ── 占比条 / 构成条 ── */
+.mgv-share { display:flex; align-items:center; gap:8px; min-width:140px; }
+.mgv-share-track { flex:1; height:8px; border-radius:4px; background:var(--meter-track); overflow:hidden; }
+.mgv-share-fill { height:100%; border-radius:4px; transform-origin:left; animation:mgv-grow .7s cubic-bezier(.22,.9,.24,1) both; }
+.mgv-share .p { width:46px; text-align:right; color:var(--ink-2); font-size:12px; }
+@keyframes mgv-grow { from { transform:scaleX(0); } }
+.mgv-mix { display:flex; height:10px; border-radius:5px; overflow:hidden; gap:2px; background:var(--surface); }
+.mgv-mix span { display:block; height:100%; transform-origin:left; animation:mgv-grow .7s cubic-bezier(.22,.9,.24,1) both; }
+
+/* ── 图例 ── */
+.mgv-legend { display:flex; gap:6px 14px; flex-wrap:wrap; font-size:12px; color:var(--ink-2); margin-bottom:8px; }
+.mgv-legend button { display:inline-flex; align-items:center; gap:5px; font-size:12px; border:none; background:none; color:var(--ink-2); cursor:pointer; padding:2px 6px; border-radius:6px; }
+.mgv-legend button:hover { background:var(--accent-wash); }
+.mgv-legend button[aria-pressed="false"] { opacity:.42; }
+.mgv-legend i { width:10px; height:10px; border-radius:3px; display:inline-block; flex:none; }
+.mgv-legend em { font-style:normal; }
+.mgv-legend b { font-weight:600; font-variant-numeric:tabular-nums; color:var(--muted); }
+
+/* ── 图表 ── */
+.mgv-chart { position:relative; width:100%; }
+.mgv-chart svg { display:block; width:100%; height:auto; overflow:visible; }
+.mgv-ax { fill:var(--muted); font-size:11px; font-family:var(--font-body); }
+.mgv-gl { stroke:var(--grid); stroke-width:1; }
+.mgv-bl { stroke:var(--base); stroke-width:1; }
+.mgv-rule { stroke:var(--base); stroke-width:1; stroke-dasharray:3 3; }
+.mgv-chart-sub { font-size:12px; color:var(--muted); margin:14px 0 4px; }
+
+/* 悬浮提示：单例 fixed 定位，颜色取 .mgv 作用域内的 tip token */
+.mgv-tip { position:fixed; left:0; top:0; pointer-events:none; background:var(--tip-bg); color:var(--tip-fg); border-radius:8px; padding:8px 10px; font-size:12px; line-height:1.55; min-width:150px; max-width:280px; box-shadow:0 6px 18px rgba(0,0,0,.22); z-index:90; opacity:0; transition:opacity .12s; }
+.mgv-tip.on { opacity:1; }
+.mgv-tip .tr { display:flex; justify-content:space-between; gap:14px; }
+.mgv-tip .tt { font-weight:600; margin-bottom:2px; }
+
+/* ── 渠道视图 hero（视图 03）── */
+.mgv-uhero { display:grid; grid-template-columns:minmax(140px,1fr) minmax(130px,1fr) minmax(0,1.5fr); gap:0 22px; align-items:center; }
+.mgv-uprimary { display:grid; gap:4px; min-width:0; }
+.mgv-uxl { font-size:clamp(24px, 2.3vw, 30px); font-weight:700; letter-spacing:-.02em; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+.mgv-uprimary.cost .mgv-uxl { color:var(--tok-cost); }
+.mgv-usub { font-size:12px; color:var(--muted); }
+.mgv-uminigrid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px 26px; border-left:1px solid var(--hair); padding-left:22px; }
+.mgv-umini { display:grid; gap:3px; min-width:0; }
+.mgv-umid { font-size:16px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+.mgv-umini.ok .mgv-umid { color:var(--good-tx); }
+.mgv-umini.warn .mgv-umid { color:var(--warn-tx); }
+.mgv-ulabel { font-size:12px; color:var(--muted); }
+.mgv-umix { margin-top:14px; padding-top:12px; border-top:1px dashed var(--hair); }
+@media (max-width:1000px) {
+  .mgv-uhero { grid-template-columns:minmax(140px,1fr) minmax(130px,1fr); }
+  .mgv-uminigrid { grid-column:1 / -1; border-left:0; padding-left:0; border-top:1px solid var(--hair); padding-top:12px; }
+}
+@media (max-width:720px) {
+  .mgv-uhero { grid-template-columns:1fr; }
+}
+
+/* ── 展开行内容（视图 04/05）── */
+.mgv-dgrid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(0,1fr); gap:20px; align-items:start; }
+.mgv-dcol { display:grid; gap:14px; min-width:0; }
+.mgv-dcol h4 { margin:0; font-size:12px; color:var(--muted); font-weight:550; }
+.mgv-pairs { display:grid; gap:6px; font-size:13px; }
+.mgv-pair { display:flex; align-items:center; gap:8px; min-width:0; }
+.mgv-pair .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.mgv-pair .num { margin-left:auto; color:var(--ink-2); white-space:nowrap; font-variant-numeric:tabular-nums; }
+@media (max-width:860px) { .mgv-dgrid { grid-template-columns:1fr; } }
+
+/* ── 设备卡（视图 06）── */
+.mgv-devs { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap:16px; }
+.mgv-dev { display:grid; gap:6px; }
+.mgv-dev .mgv-card-h .mgv-chip { margin-left:auto; }
+.mgv-dev-big { font-size:20px; font-weight:650; font-variant-numeric:tabular-nums; }
+.mgv-dev-meta { font-size:12px; color:var(--muted); }
+.mgv-dev-spark { margin-top:10px; }
+
+/* ── 网关视图（视图 07）：渠道条 + 调用链 ── */
+.mgv-provstrip { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap:10px; }
+.mgv-prov { display:flex; gap:10px; align-items:center; padding:10px 12px; border:1px solid var(--hair); border-radius:10px; background:var(--surface); cursor:pointer; text-align:left; }
+.mgv-prov:hover { border-color:var(--accent); }
+.mgv-prov[aria-pressed="true"] { border-color:var(--accent); box-shadow:inset 0 0 0 1px var(--accent); background:var(--accent-wash); }
+.mgv-prov .t { display:grid; gap:1px; min-width:0; }
+.mgv-prov .t .n1 { font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.mgv-prov .s { font-size:12px; color:var(--muted); }
+.mgv-prov .n { margin-left:auto; font-size:12px; color:var(--muted); white-space:nowrap; }
+.mgv-chain { display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
+.mgv-chain .hop { font-size:12px; padding:2px 8px; border-radius:6px; box-shadow:inset 0 0 0 1px var(--hair); white-space:nowrap; }
+.mgv-chain .hop.first { background:var(--accent-wash); box-shadow:none; color:var(--ink); font-weight:550; }
+.mgv-chain .hop.hot { box-shadow:inset 0 0 0 1px var(--accent); color:var(--accent); }
+.mgv-chain .arr { color:var(--muted); font-size:12px; }
+
+/* ── 模型建议（视图 07 下半）── */
+.mgv-sugg { display:grid; gap:14px; }
+.mgv-suggh { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.mgv-suggh .when { margin-left:auto; font-size:12px; color:var(--muted); }
+.mgv-cmp td:first-child { color:var(--muted); width:150px; white-space:nowrap; }
+.mgv-delta-up { color:var(--crit-tx); } .mgv-delta-down { color:var(--good-tx); }
+.mgv-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.mgv-btn { font-size:13px; border:1px solid var(--hair); background:var(--surface); padding:6px 14px; border-radius:8px; cursor:pointer; }
+.mgv-btn:hover { background:var(--accent-wash); }
+.mgv-btn.primary { background:var(--accent); color:var(--on-accent); border-color:transparent; font-weight:600; }
+.mgv-btn.primary:hover { filter:brightness(1.08); background:var(--accent); }
+.mgv-result { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; color:var(--good-tx); background:var(--good-wash); border-radius:8px; padding:8px 12px; }
+.mgv-result .mgv-btn { border-color:transparent; background:transparent; color:inherit; padding:2px 10px; font-size:12px; text-decoration:underline; }
+.mgv-result .mgv-btn:hover { background:transparent; filter:none; }
+
+/* ── 品牌与 Agent 图标 ── */
+.mgv .prov-logo { width:28px; height:28px; border-radius:7px; flex:none; object-fit:contain; display:block; }
+.mgv .prov-logo.sm { width:22px; height:22px; border-radius:6px; }
+.mgv .agent-ico { width:18px; height:18px; flex:none; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mgv .prov-logo.invert-d { filter:invert(1); } }
+:root[data-theme="dark"] .mgv .prov-logo.invert-d { filter:invert(1); }
+
+/* ── ≤860px：列表变横向 chips，窗口占满 ── */
+@media (max-width:860px) {
+  .mgv { grid-template-columns:1fr; gap:16px; margin-top:28px; }
+  .mgv-list { display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; scrollbar-width:thin; }
+  .mgv-item { flex:none; }
+  .mgv-item > button { display:flex; align-items:center; gap:8px; padding:7px 12px; border:1px solid var(--hair); border-radius:999px; background:var(--surface); white-space:nowrap; }
+  .mgv-item > button:hover { background:var(--accent-wash); }
+  .mgv-item > button[aria-pressed="true"] { border-color:var(--accent); background:var(--accent-wash); box-shadow:none; }
+  .mgv-num { padding-top:0; }
+  .mgv-desc { display:none; }
+  .mgv-card { padding:14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mgv-meter-fill, .mgv-share-fill, .mgv-mix span, .mgv-caret, .mgv-pill { transition:none !important; animation:none !important; }
+  .mgv-view.mgv-fade { animation:none; }
+}

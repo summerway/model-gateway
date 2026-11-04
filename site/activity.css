@@ -1,0 +1,144 @@
+/* site/activity.css — 产品页 Activity 区（MG23，返工 v2）。
+   作用域一律以 .mga 收口；结构与样式照看板「用量 · 总览」（console.html
+   viewUsageSummary + drawHeat）：顶部行右侧口径 seg、.tiles 5 格（auto-fit
+   minmax(150px,1fr)、1px 发丝线、圆角 12）、Activity 卡热力图、.grid-2
+   来源/模型占比两卡。热力色阶 --h0..h5、tooltip 深底反白，深色跟随页面的
+   主题选择器写法。 */
+
+#activity-mount { margin-top: 40px; }
+
+.mga {
+  /* 热力色阶（浅色）：0 → 无记录，h1–h5 由低到高 */
+  --h0: #eeede8;
+  --h1: #cde2fb;
+  --h2: #9ec5f4;
+  --h3: #5598e7;
+  --h4: #256abf;
+  --h5: #104281;
+  --tip-bg: #20221f;
+  --tip-fg: #fcfcfb;
+  position: relative;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mga {
+    --h0: #242724;
+    --h1: #123257;
+    --h2: #184f95;
+    --h3: #2a78d6;
+    --h4: #5598e7;
+    --h5: #9ec5f4;
+    --tip-bg: #343831;
+    --tip-fg: #f3f4ef;
+  }
+}
+:root[data-theme="dark"] .mga {
+  --h0: #242724;
+  --h1: #123257;
+  --h2: #184f95;
+  --h3: #2a78d6;
+  --h4: #5598e7;
+  --h5: #9ec5f4;
+  --tip-bg: #343831;
+  --tip-fg: #f3f4ef;
+}
+
+/* ── 顶部行：口径 seg 右对齐（同看板 tabs 行右侧的 kindSeg） ── */
+.mga-top { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.mga .mga-seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--sunk); border-radius: 8px; }
+.mga .mga-seg button {
+  border: 0; background: transparent; padding: 4px 10px; border-radius: 6px;
+  font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap;
+}
+.mga .mga-seg button[aria-pressed="true"] {
+  background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(11, 11, 11, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mga .mga-seg button[aria-pressed="true"] { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+}
+:root[data-theme="dark"] .mga .mga-seg button[aria-pressed="true"] { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+
+/* ── 5 个数字格（同 console .tiles）：auto-fit 150px、1px 发丝线、圆角 12 ── */
+.mga .tiles {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 1px;
+  background: var(--hair); border: 1px solid var(--hair); border-radius: 12px; overflow: hidden;
+  margin-bottom: 16px;
+}
+.mga .tile { background: var(--surface); padding: 14px 16px; min-width: 0; }
+.mga .tile .k { font-size: 12px; color: var(--muted); }
+.mga .tile .v {
+  font-size: 22px; font-weight: 650; margin-top: 2px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.mga .tile .v.mono { font-family: var(--font-mono); font-size: 15px; }
+.mga .tile .tile-sub { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+/* ── 卡片头（.card/.card-h 用页面现有样式，这里补 .meta 与右侧链接） ── */
+.mga .card-h .meta { color: var(--muted); font-size: 12px; }
+.mga .card-h a.meta { color: var(--accent); text-decoration: none; white-space: nowrap; }
+.mga .card-h a.meta:hover { text-decoration: underline; }
+
+/* ── 热力图：容器内横向滚动（放不下时格子取下限 10px），初始滚到最右 ── */
+.mga .mga-heat { overflow-x: auto; scrollbar-width: thin; }
+.mga .mga-heat svg { display: block; }
+.mga .ax { fill: var(--muted); font-size: 11px; }
+.mga .cell {
+  transform-box: fill-box; transform-origin: center;
+  animation: mga-cell-in 0.2s cubic-bezier(0.22, 0.9, 0.24, 1) both;
+}
+.mga.mga-idle .cell { animation-play-state: paused; } /* 首次进入视口前保持入场起点 */
+.mga .cell:hover, .mga .cell:focus { stroke: var(--ink); stroke-width: 1.5; outline: none; }
+.mga .cell:focus-visible { stroke: var(--ink); stroke-width: 1.5; outline: none; }
+@keyframes mga-cell-in { from { opacity: 0; transform: scale(0.4); } }
+.mga .h0 { fill: var(--h0); }
+.mga .h1 { fill: var(--h1); }
+.mga .h2 { fill: var(--h2); }
+.mga .h3 { fill: var(--h3); }
+.mga .h4 { fill: var(--h4); }
+.mga .h5 { fill: var(--h5); }
+
+/* ── 占比两卡（.grid-2）：名称 130px | 条（按第一名归一）| tokens | 占比；≤640px 折两行 ── */
+.mga .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; margin-top: 16px; }
+.mga .mini-list { display: grid; gap: 6px; font-size: 13px; }
+.mga .sharerow {
+  display: grid; grid-template-columns: 130px 1fr 60px 46px; gap: 10px; align-items: center;
+}
+.mga .sharerow .sr-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mga .sharerow .share-track {
+  justify-self: end; width: 100%; max-width: 260px; height: 6px; border-radius: 3px;
+  background: var(--sunk); overflow: hidden;
+}
+.mga .sharerow .share-fill {
+  height: 100%; border-radius: 3px; transform-origin: left;
+  animation: mga-grow 0.7s cubic-bezier(0.22, 0.9, 0.24, 1) both;
+}
+@keyframes mga-grow { from { transform: scaleX(0); } }
+.mga .sharerow .num { color: var(--ink-2); text-align: right; white-space: nowrap; }
+.mga .sharerow .p { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+@media (max-width: 640px) {
+  .mga .mini-list { gap: 11px; }
+  .mga .sharerow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas: "name num pct" "track track track";
+    gap: 4px 8px;
+  }
+  .mga .sharerow .sr-name { grid-area: name; font-weight: 550; }
+  .mga .sharerow .num { grid-area: num; }
+  .mga .sharerow .p { grid-area: pct; }
+  .mga .sharerow .share-track { grid-area: track; justify-self: stretch; max-width: none; }
+}
+
+/* ── tooltip：日期 / Tokens / 成本；.mga 容器为定位上下文 ── */
+.mga .tip {
+  position: absolute; left: 0; top: 0; z-index: 3; min-width: 150px; max-width: 280px;
+  padding: 8px 10px; border-radius: 8px; background: var(--tip-bg); color: var(--tip-fg);
+  font-size: 12px; line-height: 1.55; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  opacity: 0; transition: opacity 0.12s; pointer-events: none;
+}
+.mga .tip.on { opacity: 1; }
+.mga .tip .tt { font-weight: 600; margin-bottom: 2px; }
+.mga .tip .tr { display: flex; justify-content: space-between; gap: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mga .cell, .mga .share-fill { animation: none !important; }
+}

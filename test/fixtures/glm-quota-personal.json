@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "msg": "",
+  "data": {
+    "level": "MAX3",
+    "limits": [
+      {
+        "type": "TOKENS_LIMIT",
+        "percentage": 26.0,
+        "nextResetTime": 1789560000000,
+        "unit": 3
+      },
+      {
+        "type": "TOKENS_LIMIT",
+        "percentage": 5.0,
+        "nextResetTime": 1789992000000,
+        "unit": 6
+      }
+    ]
+  }
+}

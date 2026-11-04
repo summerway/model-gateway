@@ -1,0 +1,71 @@
+.tp-card{position:relative}
+/* Panels share one neutral wash; the region icon + label color distinguishes
+   Mac / NAS / 应用 regions. */
+.tp-region-mac{color:#3b7a52}
+.tp-region-nas{color:#3d68a5}
+.tp-region-apps{color:#a26a2b}
+.tp-region-mac>.tp-section,.tp-region-nas>.tp-section,.tp-region-apps>.tp-section{fill:currentColor}
+.tp-region-icon{display:block;overflow:visible}
+.tp-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.tp-controls button{background:transparent;color:var(--ink-2);border:1px solid var(--hair);border-radius:6px;padding:5px 10px;cursor:pointer;font:inherit}
+.tp-demo{font-size:12px;color:var(--muted)}
+/* 流量演示模式切换：多源并发（默认）/ 单源串行（上一版行为） */
+.tp-mode{display:inline-flex;border:1px solid var(--hair);border-radius:7px;overflow:hidden;flex:none}
+.tp-mode button{border:none;border-radius:0;padding:5px 10px;font-size:12px}
+.tp-mode button[aria-pressed="true"]{background:var(--accent-wash);color:var(--accent);font-weight:650}
+.tp-mode button+button{border-left:1px solid var(--hair)}
+.tp-scroll{overflow-x:auto;max-width:100%;scrollbar-color:var(--base) transparent;-webkit-overflow-scrolling:touch}
+/* 画布保持最小宽度：窄屏（手机）横向滑动查看，不做纵向重排 */
+.tp-svg{display:block;width:100%;min-width:900px}
+.tp-section{fill:var(--ink-2);font:12px var(--font);font-weight:550}
+.tp-edge{fill:none;stroke:var(--accent);stroke-opacity:.32;stroke-width:1.2;pointer-events:none}
+.tp-collect{stroke-opacity:.55;stroke-dasharray:4 5}
+.tp-internal{stroke-opacity:.38;stroke-width:1.1}
+/* 失败转投弧：模型胶囊间的 fallback 链，hover 有原生 title 说明；
+   每条链一个专属色（--tp-chain），与胶囊/圆点/图例同源 */
+.tp-fallback{stroke:var(--tp-chain,var(--accent));stroke-opacity:.5;stroke-width:1.2;stroke-dasharray:3 4;pointer-events:stroke}
+.tp-fallback:hover,.tp-fallback.tp-arc-lit{stroke-opacity:.95;animation:tp-fb-drift .5s linear infinite}
+@keyframes tp-fb-drift{to{stroke-dashoffset:-14}}
+@media (prefers-reduced-motion: reduce){.tp-fallback:hover,.tp-fallback.tp-arc-lit{animation:none}}
+/* ── 纯 SVG 节点（无 foreignObject：WebKit 缩放绘制 bug 的根治）── */
+.tp-node-frame{cursor:pointer}
+.tp-node-frame:focus{outline:none}
+.tp-node-frame:focus-visible .tp-focus{opacity:1}
+.tp-glyph-img,.tp-nested{pointer-events:none}
+.tp-nested{display:block;overflow:visible}
+.tp-label{fill:var(--ink);font:13px var(--font);pointer-events:none}
+.tp-label-strong{font-weight:600}
+.tp-model .tp-label{fill:var(--accent);font-size:11.5px}
+.tp-node-frame:not(.tp-model-chain):hover .tp-label{fill:var(--accent)}
+/* 链成员胶囊：描边/填充带链色，文本同色加粗，右缘留出圆点位 */
+.tp-pill-chain{stroke:var(--tp-chain);stroke-opacity:.55}
+.tp-model-chain .tp-label{fill:var(--tp-chain);font-weight:600}
+.tp-model-chain:hover .tp-label{fill:var(--tp-chain)}
+.tp-selected>.tp-pill-shape.tp-pill-chain{stroke:var(--tp-chain);stroke-width:1.4}
+.tp-chain-dots{pointer-events:none}
+/* 键盘焦点环：SVG 内 outline 不可靠，用专用描边矩形 */
+.tp-focus{fill:none;stroke:var(--accent);stroke-width:2;opacity:0;pointer-events:none}
+/* 卡片头部链图例：同色芯片，多链胶囊以此对照 */
+.tp-chains{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tp-chain-chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-2);border:1px solid var(--hair);border-color:color-mix(in srgb,var(--tp-chain) 45%,var(--hair));background:transparent;background:color-mix(in srgb,var(--tp-chain) 9%,transparent);border-radius:999px;padding:2px 9px 2px 6px;cursor:default}
+.tp-chain-chip i{width:7px;height:7px;border-radius:50%;background:var(--tp-chain);flex:none}
+.tp-source-shape{fill:var(--surface);fill-opacity:.88;stroke:var(--hair);stroke-width:1}
+.tp-pill-shape{fill:var(--accent-wash);fill:color-mix(in srgb,var(--accent) calc(var(--tp-glow,0)*38%),var(--accent-wash))}
+.tp-pill-shape.tp-pill-chain{fill:transparent;fill:color-mix(in srgb,var(--tp-chain) calc(12% + var(--tp-glow,0)*30%),transparent)}
+.tp-selected>.tp-source-shape,.tp-selected>.tp-pill-shape{stroke:var(--accent);stroke-width:1}
+/* 到达/呼吸光晕：全部 SVG 原生滤镜实现（feDropShadow/feGaussianBlur，由 JS 逐帧
+   改 flood-color/flood-opacity）—— WebKit 不支持对 SVG 元素套 CSS filter，
+   drop-shadow/invert/blur 在 iOS Chrome/Safari 上全部无效。颜色优先红
+   （fallback 红闪）→ --glow-c（来源/渠道专属色）→ 默认蓝。
+   来源例外：icon 不发光，改由 .tp-halo 外框呼吸（宽卡外框呼吸可读性更好）。 */
+.tp-halo{fill:none;stroke:var(--halo,var(--glow-c,#86bdfa));stroke-width:4;opacity:var(--tp-glow,0);pointer-events:none}
+.tp-particle{fill:var(--accent);pointer-events:none}
+/* 不再因 prefers-reduced-motion 关停发光：到达光/呼吸是状态展示而非装饰动画；
+   粒子流由 JS 循环控制，保留暂停按钮作为手动开关 */
+@media(max-width:600px){.tp-controls{gap:8px}.tp-controls button{font-size:12px}.tp-card .card-h{align-items:flex-start;gap:10px}}
+
+.tp-sample-particle{fill:var(--surface);stroke:var(--accent);stroke-width:1.3}
+
+.tp-controls [data-tp-play]{display:grid;place-items:center;width:30px;height:30px;padding:0;flex:none}
+.tp-controls [data-tp-play] svg{display:block}
+.tp-controls button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}

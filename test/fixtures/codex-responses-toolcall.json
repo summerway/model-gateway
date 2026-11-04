@@ -1,0 +1,32 @@
+{
+  "id": "resp_gpt6_fixture_002",
+  "object": "response",
+  "created_at": 1761020500,
+  "status": "completed",
+  "model": "gpt-6-sol",
+  "output": [
+    {
+      "id": "msg_002",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        { "type": "output_text", "text": "I'll check the weather for you." }
+      ]
+    },
+    {
+      "id": "fc_001",
+      "type": "function_call",
+      "status": "completed",
+      "call_id": "call_wx_001",
+      "name": "get_weather",
+      "arguments": "{\"city\": \"Tokyo\"}"
+    }
+  ],
+  "usage": {
+    "input_tokens": 45,
+    "output_tokens": 18,
+    "total_tokens": 63,
+    "output_tokens_details": { "reasoning_tokens": 6 }
+  }
+}

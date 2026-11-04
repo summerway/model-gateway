@@ -1,0 +1,29 @@
+{
+  "assets": [
+    {
+      "file": "gateway.png",
+      "tool": "built-in image_gen.imagegen",
+      "prompt": "New illustration, independent of previous images. A front-facing soft flat editorial pictogram of a small open archway made from two interlocking rounded blue ribbons, with a short pale-blue strip passing horizontally through the opening. Think of a friendly blue paper bridge, carefully composed with rounded silhouettes and a neat central opening. Matte cut-paper color shapes with crisp opaque edges. Muted medium blue, powder blue, white. Minimal restrained flat app illustration, quiet and elegant, readable as a 64px icon. Compact centered object with empty transparent margin all around. Genuine transparent PNG. No light source, lighting, glow, aura, blur, haze, background, card, panel, text, letters, shadow, glossy finish or 3D."
+    },
+    {
+      "file": "collector.png",
+      "tool": "built-in image_gen.imagegen",
+      "prompt": "The attached image is ONLY a style reference: it is the approved Gateway icon. Do not redesign or replace that Gateway. Create a NEW companion DATA COLLECTOR icon for the same product family. Match its exact soft flat blue palette, rounded folded-ribbon construction, calm pale-blue highlights, opaque matte silhouette and front-facing 2D treatment. For the collector, use a small open U-shaped receiving cradle made from the same folded blue ribbon language, with three tiny pale-blue data dots merging into it from the LEFT and a short central output strip pointing UP. Visually related to the approved arch, but distinct in its collection function. Clean compact meaningful silhouette readable at40px. Keep the same polished restraint as the reference, no hardware box, no chip, no paper, no envelope, no bucket, no written text, no letters, no outer panel, no glow or background. Genuine alpha-transparent background, compact centered object occupying75% of a square canvas."
+    },
+    {
+      "file": "knowledge.png",
+      "tool": "built-in image_gen.imagegen",
+      "prompt": "Recolor this exact soft flat illustration using sage and emerald green #3E9577, pale mint #E1F1E8, ivory white. Preserve the illustrated subject, composition, rounded silhouettes, clean details, and true transparent background. Replace all blue areas with this business-specific palette, keeping a restrained harmonious app-icon appearance and readability at 32px. Matte flat editorial fills, no additional objects, letters, logo, background, shadow, neon, glow, or 3D."
+    },
+    {
+      "file": "automation.png",
+      "tool": "built-in image_gen.imagegen",
+      "prompt": "Recolor this exact soft flat illustration using warm amber #C68A37, soft apricot #F7E9D2, ivory white. Preserve the illustrated subject, composition, rounded silhouettes, clean details, and true transparent background. Replace all blue areas with this business-specific palette, keeping a restrained harmonious app-icon appearance and readability at 32px. Matte flat editorial fills, no additional objects, letters, logo, background, shadow, neon, glow, or 3D."
+    },
+    {
+      "file": "business.png",
+      "tool": "built-in image_gen.imagegen",
+      "prompt": "Recolor this exact soft flat illustration using muted violet #8970B5, pale lavender #EEE7F7, white. Preserve the illustrated subject, composition, rounded silhouettes, clean details, and true transparent background. Replace all blue areas with this business-specific palette, keeping a restrained harmonious app-icon appearance and readability at 32px. Matte flat editorial fills, no additional objects, letters, logo, background, shadow, neon, glow, or 3D."
+    }
+  ]
+}
