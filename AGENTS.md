@@ -50,3 +50,7 @@
 源码在本仓库；部署物（compose + .env）放在仓库外的部署目录，发布 `docker compose up -d --build`。作者自己的部署路径记录在上级目录的 AGENTS.md。
 
 产品页（site/）单独托管在 Cloudflare Workers 静态资源：改动后先 `npm run site:verify`，再 `npx wrangler@4 deploy` 发布，详见 docs/site.md。
+
+## GitHub 公开仓同步
+
+公开仓与私有仓是**独立历史**（快照发布线，不推私有提交）。同步用 `npm run github:sync`：从当前 HEAD 生成快照提交推送到公开 main；`docs/plan/`、`docs/retrospectives/` 与同步脚本自身（scripts/sync-github.js，含内网标识）在脚本内 EXCLUDE 清单里，永不公开。脚本内置敏感模式自检，命中即中止；确认无害后 `--allow` 跳过。
