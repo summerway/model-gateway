@@ -134,6 +134,8 @@ npm run lint        # node --check 语法门禁
 npm run demo        # 离线演示模式：合成数据，不访问外网
 ```
 
+产品页（`site/`）的改动用 `npm run site:verify` 后 `npx wrangler@4 deploy` 发布到 Cloudflare Workers，流程见 [docs/site.md](docs/site.md)。
+
 仓库约定见 [AGENTS.md](AGENTS.md)。
 
 ## License

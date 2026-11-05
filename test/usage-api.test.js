@@ -158,7 +158,7 @@ test('/internal/keys exposes direct-only topology metadata without credential fi
   assert.equal(JSON.stringify(data).includes('PRIVATE_SYNC_KEY'), false);
 });
 
-test('rangeToWindow: today/yday/7d/30d 窗口与桶粒度', () => {
+test('rangeToWindow: today/yday/7d/30d/24h 窗口与桶粒度', () => {
   const now = new Date(2026, 8, 29, 10, 30, 0);
   const today = rangeToWindow('today', now);
   assert.equal(today.from.getDate(), 29); assert.equal(today.from.getHours(), 0);
@@ -170,6 +170,11 @@ test('rangeToWindow: today/yday/7d/30d 窗口与桶粒度', () => {
   assert.equal(d7.from.getDate(), 22); assert.equal(d7.unit, 'day');
   const d30 = rangeToWindow('30d', now);
   assert.equal(d30.unit, 'day');
+  // 24h 滚动窗口（日志›请求）：跨零点不断档 —— from = now - 24h（昨日 10:30），非自然日起点
+  const h24 = rangeToWindow('24h', now);
+  assert.equal(h24.from.getTime(), now.getTime() - 24 * 3600e3);
+  assert.equal(h24.from.getDate(), 28); assert.equal(h24.from.getHours(), 10); assert.equal(h24.from.getMinutes(), 30);
+  assert.equal(h24.to.getTime(), now.getTime()); assert.equal(h24.unit, 'hour');
   assert.equal(rangeToWindow('whatever', now).unit, 'hour'); // 默认 today
 });
 

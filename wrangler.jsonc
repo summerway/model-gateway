@@ -1,0 +1,8 @@
+// 产品页（site/）托管：Cloudflare Workers 静态资源（新版 Pages）。
+// 部署：npm run site:verify 后执行 npx wrangler@4 deploy；不需要本地安装 wrangler。
+{
+  "name": "model-gateway",
+  "compatibility_date": "2026-11-03",
+  "assets": { "directory": "site" },
+  "routes": [{ "pattern": "model-gateway.maplesnow.cn", "custom_domain": true }]
+}

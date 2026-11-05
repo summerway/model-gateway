@@ -41,6 +41,8 @@ function addLocalDays(day, n) {
 /** 统计时间窗：today/yday 按小时桶，7d/30d 按天桶（本地时区）。导出供测试。 */
 export function rangeToWindow(range, now = new Date()) {
   const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  // 24h 滚动窗口（日志›请求明细）：跨零点不断档，区别于 today 的自然日口径
+  if (range === '24h') return { from: new Date(now.getTime() - 24 * 60 * 60 * 1000), to: now, unit: 'hour' };
   if (range === 'yday') {
     const to = startOfDay(now);
     return { from: new Date(to.getTime() - 24 * 60 * 60 * 1000), to, unit: 'hour' };

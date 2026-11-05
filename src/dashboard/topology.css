@@ -32,6 +32,10 @@
 .tp-node-frame:focus{outline:none}
 .tp-node-frame:focus-visible .tp-focus{opacity:1}
 .tp-glyph-img,.tp-nested{pointer-events:none}
+/* 暗色反色位图/SVG 图标（如 OpenAI 黑 mark）：引用 defs 里的 feColorMatrix 滤镜。
+   不用 CSS invert() 函数——对 SVG 元素 WebKit 无效，见下方光晕注释。 */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .tp-glyph-img.invert-d { filter: url(#tp-invert); } }
+:root[data-theme="dark"] .tp-glyph-img.invert-d { filter: url(#tp-invert); }
 .tp-nested{display:block;overflow:visible}
 .tp-label{fill:var(--ink);font:13px var(--font);pointer-events:none}
 .tp-label-strong{font-weight:600}

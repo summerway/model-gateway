@@ -661,3 +661,127 @@ test('inbox confirm button form: data-apply must not coexist with data-close (cl
   assert.doesNotMatch(html, /!\s*e\.target\.dataset\.apply/, '处理器不得依赖空属性的 truthy 判断');
   assert.match(html, /closest\('\[data-apply\]'\)/, '确认分支按 closest 分派');
 });
+
+// ── 日志 › 请求（近 24h 混排明细）── v0.5 console 重做时列被砍成 6 列且写死 kind=served，
+// Claude Code 等订阅直连记录（observed，采集器导入）被整体过滤。2026-11-05 恢复：
+// 10 列（含输入/输出/缓存创建/缓存命中/成本）、served 与 observed 混排、渠道筛选按需拉取。
+function loadConsoleView(extraLocation = {}, extraSandbox = {}) {
+  const html = readFileSync(new URL('../src/dashboard/console.html', import.meta.url), 'utf8');
+  const block = html.split('<script>').slice(1).map((s) => s.split('</script>')[0]).find((s) => s.includes('viewRequests'));
+  assert.ok(block, 'console main script block not found');
+  const defs = block.slice(0, block.indexOf("document.addEventListener('change'")); // 事件绑定段有 DOM 副作用，截掉
+  const sandbox = {
+    matchMedia: () => ({ matches: false }),
+    document: { querySelector: () => null, querySelectorAll: () => [], getElementById: () => ({ innerHTML: '' }), addEventListener() {}, documentElement: { classList: { toggle() {} } } },
+    location: { hash: '#logs-requests', ...extraLocation },
+    fetch: () => new Promise(() => {}), // 悬挂：触发 loadLG 也不抛未处理拒绝
+    fetchJson: () => new Promise(() => {}), // 真实声明在切片截断点之后，这里给悬挂实现
+    ...extraSandbox,
+  };
+  return runInNewContext(defs + '\nS = { providers: [], logs: [] };\n({ viewRequests, viewChannels, loadLG, uFiltersHtml, LG, U, state })', sandbox);
+}
+
+test('logs view: 10 列表头 + observed 混排（用量导入/耗时—/成本4位）+ 上游模型改写 A → B + 未回报 usage 行', () => {
+  const { viewRequests, LG, state } = loadConsoleView();
+  LG.data = {
+    logs: [
+      { ts: '2026-11-05T05:06:12.854Z', kind: 'served', client: 'mac-pi', providerId: 'glm-primary', model: 'glm-5.3', upstreamModel: 'glm-5.3', stream: true, status: 200, ok: true, latencyMs: 7133, usage: { input: 375, output: 387, cacheRead: 41216, cacheWrite: 0 }, reported: true, cost: 0.012944 },
+      { ts: '2026-11-05T04:51:58.048Z', kind: 'observed', device: 'mac', path: 'claude-code', client: 'claude-code', providerId: 'claude', model: 'claude-opus-5-5', upstreamModel: 'claude-opus-5-5', status: null, ok: null, latencyMs: null, usage: { input: 2, output: 3521, cacheRead: 87993, cacheWrite: 2144 }, reported: true, cost: 0.098747 },
+      { ts: '2026-11-05T03:00:00.000Z', kind: 'served', client: 'pi-agent', providerId: 'deepseek', model: 'glm-5.3', upstreamModel: 'deepseek-v4-pro', stream: false, status: 502, ok: false, latencyMs: 821, usage: null, reported: false, cost: null },
+    ],
+    filters: { providers: [{ id: 'glm-primary', name: '智谱 1' }, { id: 'claude', name: 'Claude' }] },
+    totals: {},
+  };
+  const out = viewRequests();
+  // 列头：时间/来源/渠道·模型/输入/输出/缓存创建/缓存命中/成本/耗时/状态（Tokens 合并列已拆开）
+  for (const th of ['时间', '来源', '渠道 · 模型', '输入', '输出', '缓存创建', '缓存命中', '成本', '耗时', '状态']) assert.match(out, new RegExp(th), `column ${th}`);
+  assert.equal((out.match(/<th\b/g) ?? []).length, 10, 'exactly 10 columns');
+  // served 行：四类 token 与 4 位小数成本
+  assert.match(out, /375/); assert.match(out, /387/); assert.match(out, /41,216/); assert.match(out, /\$0\.0129/);
+  // observed（Claude Code）行：可见、用量导入、耗时「—」、成本按订阅价折算
+  assert.match(out, /claude-opus-5\.5/); assert.match(out, /用量导入/); assert.match(out, /87,993/); assert.match(out, /\$0\.0987/);
+  // 失败请求行：上游模型改写展示 A → B；usage 未回报 → 输入/输出「暂无数据」、缓存「—」
+  assert.match(out, /glm-5\.3[\s\S]*?→[\s\S]*?deepseek-v4-pro/); assert.match(out, /暂无数据/);
+  // 渠道下拉含 observed 渠道（claude）—— Claude Code 记录可按渠道筛出
+  assert.match(out, /<select data-lg="prov"[ >][\s\S]*?value="claude"/, '渠道下拉含 observed 渠道（claude）—— Claude Code 记录可按渠道筛出');
+  // 筛选行顺序：渠道 → 口径 → 日志类型（2026-11-05 用户反馈）
+  { const iP = out.indexOf('data-lg="prov"'), iK = out.indexOf('data-seg="kind"'), iF = out.indexOf('data-seg="logFilter"'); assert.ok(iP > 0 && iP < iK && iK < iF, 'filter order: channel → kind → log type'); }
+  assert.match(out, /近 24 小时滚动窗口/);
+  // 「失败」筛选：只留 served 失败行，observed（ok=null）不误伤为失败
+  state.logFilter = 'failed';
+  const failed = viewRequests();
+  assert.doesNotMatch(failed, /用量导入/, 'observed rows must not count as failed');
+  assert.match(failed, /deepseek-v4-pro/, 'served failure stays visible');
+});
+
+test('logs view: 渠道页「查看日志」hash 定位 —— 跳转锁定下拉，手动筛选不被残留锚点拉回', () => {
+  // 直开带参 URL：首次加载采纳锚点渠道并按需拉取（fetchJson 悬挂 → loading 停留 true）
+  const page = loadConsoleView({ hash: '#logs-requests/claude' });
+  page.viewRequests();
+  assert.equal(page.LG.prov, 'claude', 'anchor adopted on first load');
+  assert.equal(page.LG.loading, true, 'fetch in flight');
+  // 回归（2026-11-05 线上反馈）：手动换渠道后重渲染，URL 锚点仍是一/claude —— 不得拉回旧渠道
+  page.LG.loading = false; page.LG.loadedOnce = true; // 模拟首拉完成（沙箱 fetch 悬挂，手动置状态）
+  page.LG.prov = 'deepseek'; // 模拟 change handler 效果
+  page.LG.data = { logs: [], filters: { providers: [{ id: 'deepseek' }] }, totals: {} };
+  const out = page.viewRequests();
+  assert.equal(page.LG.prov, 'deepseek', 'manual selection survives re-render with stale anchor');
+  assert.equal(page.LG.loading, false, 'no refetch storm');
+  assert.match(out, /value="deepseek" selected/, 'dropdown reflects manual selection');
+  // 无参 hash（普通切页）不清筛选、不触发重拉
+  const page2 = loadConsoleView({ hash: '#logs-requests' });
+  page2.LG.prov = 'glm-primary';
+  page2.LG.data = { logs: [], filters: { providers: [] }, totals: {} };
+  page2.viewRequests();
+  assert.equal(page2.LG.prov, 'glm-primary', 'plain navigation keeps provider filter');
+  assert.notEqual(page2.LG.data, null, 'plain navigation does not refetch');
+});
+
+test('logs view: 渠道页「查看日志」常驻 —— 未选渠道 → all 锚点（跳转后全部日志），选中 → 渠道定位', () => {
+  const page = loadConsoleView();
+  page.U.data = { filters: { providers: [], models: [], clients: [] } };
+  page.U.prov = '';
+  assert.match(page.uFiltersHtml(), /#logs-requests\/all"/, 'no channel → all-logs anchor');
+  page.U.prov = 'claude';
+  assert.match(page.uFiltersHtml(), /#logs-requests\/claude"/, 'channel selected → channel anchor');
+  // 'all' 锚点首载不被误当渠道 id（否则会拉 provider=all 的空数据再多一次和解重拉）
+  const p2 = loadConsoleView({ hash: '#logs-requests/all' });
+  p2.viewRequests();
+  assert.equal(p2.LG.prov, '', "'all' anchor is not a channel id");
+  assert.equal(p2.LG.loading, true, 'auto-load still fires');
+});
+
+test('channels view: 概览「查看用量」跳转干净定位 —— 口径/来源/模型残留一并重置（2026-11-05 反馈：订阅直连残留吞掉智谱 1 定位）', () => {
+  const page = loadConsoleView({ hash: '#usage-channels/glm-primary' });
+  page.state.kind = 'observed'; // 模拟之前在渠道页选了订阅直连
+  page.U.model = 'claude-opus-5-5'; page.U.client = 'claude-code'; // 其他残留筛选
+  page.viewChannels();
+  assert.equal(page.U.prov, 'glm-primary', 'focus applies channel');
+  assert.equal(page.state.kind, 'all', 'kind reset to all —— glm-primary 在订阅直连口径下无记录，不重置则选项消失、定位落空');
+  assert.equal(page.U.range, 'today', 'range reset to today');
+  assert.equal(page.U.model, '', 'model filter cleared');
+  assert.equal(page.U.client, '', 'client filter cleared');
+  assert.equal(page.U.loading, true, 'refetch in flight');
+});
+
+test('logs view: 口径切换后渠道和解 —— 订阅直连+claude → 经网关时渠道真实重置为全部并重拉（2026-11-05 线上反馈）', async () => {
+  const calls = [];
+  const served = { logs: [{ ts: '2026-11-05T08:00:00.000Z', kind: 'served', client: 'mac-pi', providerId: 'glm-primary', model: 'glm-5.3', upstreamModel: 'glm-5.3', ok: true, status: 200, latencyMs: 1000, usage: { input: 10, output: 10, cacheRead: 10, cacheWrite: 0 }, reported: true, cost: 0.001 }], filters: { providers: [{ id: 'glm-primary' }] }, totals: {}, modelNames: {} };
+  const observed = { logs: [{ ts: '2026-11-05T04:00:00.000Z', kind: 'observed', client: 'claude-code', providerId: 'claude', model: 'claude-opus-5-5', usage: { input: 2, output: 1, cacheRead: 1, cacheWrite: 1 }, reported: true, cost: 0.01 }], filters: { providers: [{ id: 'claude' }] }, totals: {}, modelNames: {} };
+  // hash 用非 logs 视图：跳过 loadLG 尾部的 render()（沙箱无完整 DOM），只测数据层和解
+  const page = loadConsoleView({ hash: '#usage-channels' }, { fetchJson: (url) => { calls.push(String(url)); return Promise.resolve(String(url).includes('kind=served') ? served : observed); } });
+  const { loadLG, LG, state } = page;
+  // 订阅直连 + claude：组合有效，渠道保留
+  state.kind = 'observed'; LG.prov = 'claude';
+  await loadLG();
+  assert.equal(LG.prov, 'claude', 'valid combo keeps channel');
+  assert.ok(calls[0].includes('provider=claude') && calls[0].includes('kind=observed'));
+  // 切经网关（kind handler 效果）：claude 在该口径无记录 → 渠道真实重置并重拉，下拉显示与数据源不再错位
+  state.kind = 'served'; LG.data = null;
+  await loadLG();
+  assert.equal(LG.prov, '', 'channel reconciled to all');
+  assert.equal(calls.length, 3, 'reconcile triggers exactly one refetch');
+  assert.ok(!calls[2].includes('provider='), 'refetch drops stale channel');
+  assert.ok(calls[2].includes('kind=served'));
+  assert.ok(LG.data.logs.length === 1 && LG.data.logs[0].providerId === 'glm-primary', 'data follows reconciled filter');
+});

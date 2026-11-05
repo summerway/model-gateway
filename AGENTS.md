@@ -48,3 +48,5 @@
 ## 部署（二阶段）
 
 源码在本仓库；部署物（compose + .env）放在仓库外的部署目录，发布 `docker compose up -d --build`。作者自己的部署路径记录在上级目录的 AGENTS.md。
+
+产品页（site/）单独托管在 Cloudflare Workers 静态资源：改动后先 `npm run site:verify`，再 `npx wrangler@4 deploy` 发布，详见 docs/site.md。

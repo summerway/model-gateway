@@ -139,7 +139,7 @@
 .mgv-tile .v .mgv-chip { vertical-align:2px; }
 .mgv-tile .s { font-size:12px; color:var(--ink-2); margin-top:2px; }
 @media (max-width:1000px) { .mgv-tiles { grid-template-columns:repeat(3, minmax(0,1fr)); } }
-@media (max-width:560px) { .mgv-tiles { grid-template-columns:1fr 1fr; } .mgv-tile:last-child:nth-child(odd) { grid-column:1 / -1; } }
+@media (max-width:560px) { .mgv-tiles { grid-template-columns:1fr 1fr; } .mgv-tile:last-child:nth-child(odd) { grid-column:1 / -1; } .mgv-tile { text-align:center; } }
 
 /* ── 表格 ── */
 .mgv-tblwrap { overflow-x:auto; margin:0 -4px; }

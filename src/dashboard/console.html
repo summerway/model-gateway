@@ -82,6 +82,9 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
 .probe-btn { border:1px solid var(--hair); background:var(--surface); color:var(--ink-2); border-radius:6px; font-size:11px; padding:2px 8px; cursor:pointer; }
 .probe-btn:hover { border-color:var(--accent); color:var(--accent); }
 .probe-btn:disabled { opacity:.55; cursor:default; }
+.u-filters .probe-btn { min-height:28px; display:inline-flex; align-items:center; } /* 与 seg/下拉等高；anchor 需 inline-flex 才能竖直居中 */
+.probe-btn.cta { background:var(--accent); color:var(--on-accent); border-color:transparent; font-weight:600; } /* 功能动作钮（如「查看日志」）：主色实底，与中性按钮区分（同 .btn.primary 令牌） */
+.probe-btn.cta:hover { filter:brightness(1.08); border-color:transparent; color:var(--on-accent); }
 .icon-btn.is-loading svg { animation:c-spin .9s linear infinite; }
 .icon-btn.is-success { border-color:var(--good-tx); color:var(--good-tx); }
 .icon-btn.is-success .fb-check { stroke-dasharray:1; stroke-dashoffset:0; animation:c-check .3s cubic-bezier(.16,1,.3,1); }
@@ -733,6 +736,7 @@ async function simulateRefresh(silent = false, force = null) {
     // 渠道视图由 loadU 内部渲染：若这里再 render() 会双重渲染，第二次 rollAttr
     // 看到 rollPrev 已是新值 → 不输出 data-roll → 把刚启动的数字滚动换成静态文本。
     if (currentView() === 'usage-channels' && !U.loading) await loadU();
+    else if (currentView() === 'logs-requests' && !LG.loading) await loadLG(); // 保留渠道/口径筛选重拉（60s 自动刷新覆盖）
     else render();
     markLive();
   }
@@ -1117,12 +1121,16 @@ function uFiltersHtml() {
   const cl = f.clients ?? [];
   const clientSel = `<select data-uf="client"><option value=""${U.client ? '' : ' selected'}>${t('全部来源')}</option>${cl.filter(isAg).map(cOpt).join('')}<hr>${[...cl.filter((c) => !isAg(c) && c !== '__other').map(cOpt), ...(cl.includes('__other') ? [cOpt('__other')] : [])].join('')}</select>`;
   const hasFilter = U.prov || U.model || U.client;
+  // 选中渠道时提供直达：日志›请求自动定位该渠道（近 24h 混排明细）
+  // 按钮常驻：未选渠道 → #logs-requests/all（跳转后重置为全部日志）；选中 → 带渠道定位
+  const logLink = `<a class="probe-btn cta" style="text-decoration:none;margin-left:auto" href="#logs-requests/${U.prov ? encodeURIComponent(U.prov) : 'all'}">${t('查看日志')}</a>`;
   return `<div class="u-filters">
     <label>${t('渠道')}<select data-uf="prov">${opt(f.providers ?? [], U.prov, t('全部渠道'))}</select></label>
     <label>${t('来源{v1}', { v1: clientSel })}</label>
     <label>${t('模型')}<select data-uf="model">${opt(f.models ?? [], U.model, t('全部模型'))}</select></label>
     ${seg('uRange', Object.entries(U_RANGE), U.range)}
     ${hasFilter ? `<button type="button" class="probe-btn" data-ufclear="1">${t('清除筛选')}</button>` : ''}
+    ${logLink}
   </div>`;
 }
 
@@ -1326,8 +1334,8 @@ function drawUSource() {
 function drawU() { drawUTrend(); drawUSource(); }
 
 function viewChannels() {
-  const focus = hashParam(); // 概览额度卡「查看用量」带渠道定位 → 首次进入转为渠道筛选并默认今天；之后用户可自由修改筛选
-  if (focus && focus !== U.lastFocus) { U.lastFocus = focus; U.prov = focus; U.range = 'today'; U.data = null; loadU(); }
+  const focus = hashParam(); // 概览额度卡「查看用量」带渠道定位 → 跳转即干净定位：重置口径/来源/模型与时间档（不受残留筛选影响），选中对应渠道
+  if (focus && focus !== U.lastFocus) { U.lastFocus = focus; U.prov = focus; U.range = 'today'; U.model = ''; U.client = ''; state.kind = 'all'; save(); U.data = null; LG.data = null; loadU(); }
   if (!U.data && !U.loading && !U.error) { loadU(); }
   let inner;
   if (U.error) {
@@ -1476,16 +1484,68 @@ function viewKeys() {
 }
 
 /* ── 日志 ── */
+/* 请求明细（近 24h 滚动窗口）：served 与 observed 混排 —— Claude Code 等订阅直连记录
+   由采集器事后导入（无耗时/成败），与经网关请求按时间同列展示（状态「用量导入」、耗时「—」）。
+   渠道/口径筛选按需拉取（U 同模式）；全局快照不再携带明细（S.logs 退役）。 */
+const LG = { data: null, loading: false, error: '', prov: '', tok: 0, loadedOnce: false };
+async function loadLG() {
+  const tok = ++LG.tok; LG.loading = true; // 请求令牌：渠道/口径切换与自动刷新竞态时，过期响应直接丢弃
+  const q = new URLSearchParams({ range: '24h', logLimit: '200' });
+  if (LG.prov) q.set('provider', LG.prov);
+  if (state.kind === 'served' || state.kind === 'observed') q.set('kind', state.kind);
+  try {
+    const d = await fetchJson('/internal/usage?' + q);
+    if (d.enabled === false || !d.totals) throw Object.assign(new Error(), { usageDisabled: true });
+    if (tok !== LG.tok) return; // 期间已发起更新的查询
+    // 口径切换后选中渠道在新口径下无记录（如 claude 仅订阅直连）：下拉已无该选项而查询仍带旧渠道，
+    // 显示与数据错位 —— 真实重置为「全部渠道」并按新组合重拉（渠道两口径皆有效时保留，不打断）
+    if (LG.prov && !(d.filters?.providers ?? []).some((x) => x.id === LG.prov)) { LG.prov = ''; LG.data = null; return loadLG(); }
+    LG.data = d; LG.error = ''; LG.loadedOnce = true;
+    for (const [k, v] of Object.entries(d.modelNames ?? {})) MODEL_NAMES.set(k, v);
+  } catch (e) { if (tok === LG.tok) LG.error = e.usageDisabled ? 'usage-disabled' : e.message; }
+  if (tok !== LG.tok) return;
+  LG.loading = false;
+  if (currentView() === 'logs-requests') render();
+}
+const fmtUsd4 = (n) => (typeof n === 'number' ? '$' + n.toFixed(4) : '—'); // 单请求成本小，田旧版 4 位小数口径
+function lgRow(l) {
+  // 上游未回报 usage（失败请求/非生成端点）：输入/输出「暂无数据」，缓存与成本「—」
+  const nrep = !l.usage || !l.reported;
+  const io = nrep
+    ? `<td class="r num muted">${t('暂无数据')}</td><td class="r num muted">${t('暂无数据')}</td><td class="r num">—</td><td class="r num">—</td>`
+    : `<td class="r num">${fmtInt(l.usage.input)}</td><td class="r num">${fmtInt(l.usage.output)}</td><td class="r num">${fmtInt(l.usage.cacheWrite)}</td><td class="r num">${fmtInt(l.usage.cacheRead)}</td>`;
+  // observed（订阅直连导入）无成败口径：不参与失败/中断筛选，状态固定「用量导入」
+  const st = l.kind === 'observed' ? ['ghost', t('用量导入')] : l.ok ? ['good', t('成功')] : l.clientAbort ? ['', t('中断')] : ['crit', I.crit + (l.status ?? t('失败'))];
+  const model = l.upstreamModel && l.upstreamModel !== l.model ? `${esc(modelLabel(l.model))} <span class="muted">→ ${esc(modelLabel(l.upstreamModel))}</span>` : esc(modelLabel(l.model));
+  return `<tr><td class="num muted">${clock(l.ts)}</td><td>${esc(srcLabel(l.client))}</td><td><span class="muted">${esc(provName(l.providerId))}</span> · <span style="font-family:var(--mono);font-size:12.5px">${model}</span></td>${io}<td class="r num">${fmtUsd4(l.cost)}</td><td class="r num">${l.latencyMs != null ? (l.latencyMs / 1000).toFixed(1) + 's' : '—'}</td><td class="r"><span class="chip ${st[0]}">${st[1]}</span></td></tr>`;
+}
 function viewRequests() {
-  if (!S) return subTabs('logs-requests') + `<div class="view">${skTableCard(t('请求日志'), 8)}</div>`;
-  const f = state.logFilter;
-  const rows = S.logs.filter((l) => f === 'all' || (f === 'failed' ? !l.ok && !l.clientAbort : l.clientAbort)).slice(0, state.logLimit);
-  return subTabs('logs-requests') + `<div class="view">
-    <section class="card"><div class="card-h"><h2>${t('请求')}</h2><div class="controls">${seg('logFilter', [['all', t('全部')], ['failed', t('失败')], ['abort', t('客户端中断')]], f)}${limitSel('logLimit')}</div></div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${t('时间')}</th><th>${t('来源')}</th><th>${t('渠道 · 模型')}</th><th class="r">Tokens</th><th class="r">${t('耗时')}</th><th class="r">${t('状态')}</th></tr></thead><tbody>
-    ${rows.map((l) => { const totals = l.usage ? KINDS.reduce((a, [k]) => a + l.usage[k], 0) : 0; const st = l.ok ? ['good', t('成功')] : l.clientAbort ? ['', t('中断')] : ['crit', I.crit + (l.status ?? t('失败'))]; return `<tr><td class="num muted">${clock(l.ts)}</td><td>${esc(srcLabel(l.client))}</td><td><span class="muted">${esc(provName(l.providerId))}</span> · <span style="font-family:var(--mono);font-size:12.5px">${esc(modelLabel(l.model))}</span></td><td class="r num">${totals ? fmtInt(totals) : '—'}</td><td class="r num">${l.latencyMs != null ? (l.latencyMs / 1000).toFixed(1) + 's' : '—'}</td><td class="r"><span class="chip ${st[0]}">${st[1]}</span></td></tr>`; }).join('') || `<tr><td colspan="6" class="empty">${t('没有符合条件的请求')}</td></tr>`}
-    </tbody></table></div></section>
-    </div>`;
+  // 渠道页「查看日志」带渠道定位：锚点只在真实导航时采纳（hashchange 监听），渲染路径不重放 ——
+  // 手动调整下拉后不会被 URL 残留锚点拉回；直开带参 URL 靠首次加载前采纳（loadedOnce 前一次性）
+  const focus = hashParam();
+  if (focus && focus !== 'all' && !LG.loadedOnce && !LG.prov) LG.prov = focus;
+  if (!LG.data && !LG.loading && !LG.error) loadLG();
+  if (!S) return subTabs('logs-requests') + `<div class="view">${skTableCard(t('请求'), 8)}</div>`;
+  const provList = LG.data?.filters?.providers ?? [];
+  // 筛选行：渠道（加粗标签，与下拉间 6px 间距）→ 口径 → 日志类型 → 条数（.controls select 的 margin-left:auto 把条数推到行尾）
+  const provSel = `<label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:700">${t('渠道')}<select data-lg="prov" style="margin-left:0;font-weight:600"><option value="">${t('全部渠道')}</option>${provList.map((x) => `<option value="${esc(x.id)}"${LG.prov === x.id ? ' selected' : ''}>${esc(x.name ?? x.id)}</option>`).join('')}</select></label>`;
+  const controls = `<div class="controls">${provSel}${kindSeg()}${seg('logFilter', [['all', t('全部')], ['failed', t('失败')], ['abort', t('客户端中断')]], state.logFilter)}${limitSel('logLimit')}</div>`;
+  let inner;
+  if (LG.error) {
+    inner = `<section class="card" style="padding:20px"><p class="crit" style="margin:0">${LG.error === 'usage-disabled' ? t('使用统计尚未启用') : esc(LG.error)}</p><p class="muted" style="font-size:12px">${t('稍后自动重试，或点右上角刷新。')}</p></section>`;
+  } else if (!LG.data) {
+    inner = skTableCard(t('请求'), 8);
+  } else {
+    const f = state.logFilter;
+    const logs = LG.data.logs.filter((l) => f === 'all' || (f === 'failed' ? l.kind !== 'observed' && !l.ok && !l.clientAbort : l.clientAbort)).slice(0, state.logLimit);
+    inner = `<section class="card"><div class="card-h"><h2>${t('请求')}</h2>${controls}</div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${t('时间')}</th><th>${t('来源')}</th><th>${t('渠道 · 模型')}</th><th class="r">${t('输入')}</th><th class="r">${t('输出')}</th><th class="r">${t('缓存创建')}</th><th class="r">${t('缓存命中')}</th><th class="r">${t('成本')}</th><th class="r">${t('耗时')}</th><th class="r">${t('状态')}</th></tr></thead><tbody>
+    ${logs.map(lgRow).join('') || `<tr><td colspan="10" class="empty">${t('没有符合条件的请求')}</td></tr>`}
+    </tbody></table></div>
+    <p class="muted" style="font-size:12px;margin:10px 0 0">${t('近 24 小时滚动窗口 · {v1} 条记录（最多拉取 200 条）', { v1: fmtInt(LG.data.logs.length) })}</p>
+    </section>`;
+  }
+  return subTabs('logs-requests') + `<div class="view">${inner}</div>`;
 }
 let EV;
 labelUpdates.push(() => { EV = { activation: ['good', t('窗口激活')], model_guard: ['info', t('模型巡检')], model_inbox_applied: ['good', t('模型落地')], model_inbox_rollback: ['warn', t('模型回滚')], model_inbox_error: ['crit', t('落地异常')], client_abort: ['', t('客户端中断')], probe_error: ['crit', t('额度查询异常')], quota_restored: ['good', t('额度恢复')], quota_demoted: ['warn', t('额度将尽降级')], vision_placeholder: ['', t('图片占位')], vision_reroute: ['info', t('视觉改写')], token_refresh: ['', t('令牌轮换')], fallback: ['warn', t('接力切换')], request_error: ['crit', t('请求失败')], config_model_unknown: ['warn', t('未知模型')], embeddings_degraded: ['warn', t('向量降级')], embeddings_error: ['crit', t('向量异常')], imagegen: ['good', t('图片生成')], imagegen_error: ['crit', t('图片生成失败')] }; });
@@ -1580,7 +1640,9 @@ function render() {
 }
 document.addEventListener('change', (e) => {
   const s = e.target.closest('select[data-limit]'); if (s) { const k = s.dataset.limit; const v = Number(s.value) || LIMIT_DEF[k]; if (LIMITS[k].includes(v)) { state[k] = v; save(); render(); } }
-  const uf = e.target.closest('select[data-uf]'); if (uf) { U[uf.dataset.uf] = uf.value; U.data = null; loadU(); }
+  const uf = e.target.closest('select[data-uf]'); if (uf) { U[uf.dataset.uf] = uf.value; U.lastFocus = null; U.data = null; loadU(); } // 手动改筛选后锚点失效，二次点「查看用量」仍能重新定位
+  // 日志›请求的渠道筛选：只改数据与重拉，不动锚点（导航采纳由 hashchange 监听负责）
+  const lgs = e.target.closest('select[data-lg]'); if (lgs) { LG[lgs.dataset.lg] = lgs.value; LG.data = null; loadLG(); }
 });
 document.addEventListener('click', (e) => {
   // 占比卡片 → 来源/模型视角：跳转前把目标视角的时间档对齐到链接标注的时段（近 30 天）
@@ -1589,7 +1651,7 @@ document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-seg] button');
   if (b) { const k = b.parentElement.dataset.seg; const v = b.dataset.v;
     if (k === 'uRange') { U.range = v; U.data = null; loadU(); return; }
-    if (k === 'kind') { state.kind = v; save(); if (currentView() === 'usage-channels') { U.data = null; loadU(); } else render(); return; }
+    if (k === 'kind') { state.kind = v; save(); LG.data = null; if (currentView() === 'usage-channels') { U.data = null; loadU(); return; } if (currentView() === 'logs-requests') { loadLG(); return; } render(); return; }
     state[k] = /^\d+$/.test(v) ? Number(v) : v; save(); render(); return; }
   const ucl = e.target.closest('[data-ufclear]'); if (ucl) { U.prov = ''; U.client = ''; U.model = ''; U.data = null; loadU(); return; }
   const uk = e.target.closest('[data-uk]'); if (uk) { const k = uk.dataset.uk; U.hidden.has(k) ? U.hidden.delete(k) : U.hidden.add(k); const lg = document.querySelector('#main .u-legend'); if (lg) lg.innerHTML = uLegendHtml(); drawUTrend(); return; }
@@ -1653,7 +1715,16 @@ MGI18n.onLang(() => {
   render(); // Stops topology before rebuilding it with the selected labels.
 });
 updateChrome();
-addEventListener('hashchange', () => { render(); startAutoRefresh(); });
+addEventListener('hashchange', () => {
+  // 渠道页「查看日志」跳转定位：锚点仅在真实导航时采纳一次；渲染路径不重放，避免手动筛选被残留锚点覆盖；
+  // all = 渠道页未选渠道 → 明确重置为全部日志（区别于子页签普通切页的保留筛选）
+  if (currentView() === 'logs-requests') {
+    const f = hashParam();
+    if (f === 'all') { if (LG.prov) { LG.prov = ''; LG.data = null; loadLG(); } }
+    else if (f && f !== LG.prov) { LG.prov = f; LG.data = null; loadLG(); }
+  }
+  render(); startAutoRefresh();
+});
 let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { repositionPills(); const v = currentView(); if (v === 'usage-summary') drawHeat(false); if (v === 'usage-trends') drawTrends(); if (v === 'usage-channels') drawU(); }, 150); });
 
 /* ── 真实数据装载 ── */
@@ -1667,7 +1738,7 @@ async function loadConsoleData(force = null) {
   // force: null = 只读服务端快照（自动 60s）；'all' = 全局重查额度；providerId = 单渠道重查
   const [dash, usage, keysD, inbox, activity, dClient, dModel, dProvider, dDevice, dClientModel, devices] = await Promise.all([
     fetchJson('/internal/dashboard' + (force ? '?force=' + encodeURIComponent(force) : '')),
-    fetchJson('/internal/usage?range=today&logLimit=200&kind=served'),
+    fetchJson('/internal/usage?range=today&kind=served'), // 概览「今日网关」口径；请求明细由 LG（24h 混排）按需拉取
     fetchJson('/internal/keys'),
     fetchJson('/internal/inbox'),
     fetchJson('/internal/usage/activity'),

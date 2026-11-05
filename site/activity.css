@@ -125,7 +125,10 @@
   .mga .sharerow .sr-name { grid-area: name; font-weight: 550; }
   .mga .sharerow .num { grid-area: num; }
   .mga .sharerow .p { grid-area: pct; }
-  .mga .sharerow .share-track { grid-area: track; justify-self: stretch; max-width: none; }
+  .mga .sharerow .share-track { grid-area: track; justify-self: stretch; max-width: none; height: 5px; border-radius: 2.5px; }
+  .mga .tile { text-align: center; }
+  .mga .tile .tile-sub { display: block; margin-top: 2px; }
+  .mga .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 
 /* ── tooltip：日期 / Tokens / 成本；.mga 容器为定位上下文 ── */

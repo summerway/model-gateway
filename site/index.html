@@ -7,6 +7,14 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="把你的 AI 订阅接到同一个地址：额度用完自动换，用量一目了然。">
 <link rel="icon" href="assets/favicon.png">
+<script>
+/* 主题先行：读 mg-theme，否则跟随系统；首帧前落到 <html data-theme> 避免闪烁 */
+try {
+  var __t = localStorage.getItem('mg-theme');
+  if (__t !== 'light' && __t !== 'dark') __t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', __t);
+} catch (e) {}
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -45,7 +53,8 @@
   --term:#0b0c0b; --base:#41443e; color-scheme:dark;
 }
 * { box-sizing:border-box; }
-html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; }
+html { -webkit-text-size-adjust:100%; scroll-behavior:smooth; overflow-x:clip; }
+body { overflow-x:clip; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior:auto; } }
 body { margin:0; background:var(--page); color:var(--ink); font:16px/1.65 var(--font-body); }
 img { max-width:100%; display:block; }
@@ -61,22 +70,41 @@ p { margin:0; }
 body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-inset-top, 0px); z-index:10; background:var(--page); }
 .nav { position:sticky; top:env(safe-area-inset-top, 0px); z-index:9; background:color-mix(in srgb, var(--page) 90%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--hair); }
 .nav .wrap { display:flex; align-items:center; gap:20px; min-height:60px; }
-.brand { display:flex; align-items:center; gap:10px; color:var(--ink); text-decoration:none; font:700 17px var(--font-display); }
-.brand img { width:30px; height:30px; }
+.brand { display:flex; align-items:center; gap:10px; color:var(--ink); text-decoration:none; font:700 17px var(--font-display); white-space:nowrap; }
+.brand img { width:30px; height:30px; transform:translateZ(0); /* iOS: backdrop-filter 重绘时位图闪烁，独立合成层修复 */ }
 .nav-links { display:flex; gap:18px; margin-left:auto; align-items:center; font-size:14px; }
 .nav-links a { color:var(--ink-2); text-decoration:none; }
 .nav-links a:hover { color:var(--ink); }
-.lang { display:inline-flex; border:1px solid var(--hair); border-radius:8px; overflow:hidden; }
-.lang button { font-size:13px; font-weight:500; color:var(--muted); background:transparent; border:0; padding:6px 12px; }
+.nav-links a[data-repo] { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.lang { display:inline-flex; border:1px solid var(--hair); border-radius:8px; overflow:hidden; direction:ltr; }
+.lang button { font-size:13px; font-weight:500; color:var(--muted); background:transparent; border:0; padding:6px 0; width:40px; display:inline-flex; align-items:center; justify-content:center; }
 .lang button[aria-pressed="true"] { background:var(--ink); color:var(--page); }
 @media (max-width:720px) { .nav-links .hide-sm { display:none; } }
+@media (max-width:430px) {
+  .nav .wrap { gap:10px; }
+  .brand { font-size:15px; }
+  .brand img { width:26px; height:26px; }
+  .nav-links { gap:10px; }
+}
+@media (max-width:380px) { .nav-links a[data-repo] { font-size:0; gap:0; } }
+@media (max-width:340px) {
+  .brand { font-size:14px; }
+  .brand img { width:24px; height:24px; }
+  .lang button { width:36px; }
+}
+.theme-btn { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border:1px solid var(--hair); border-radius:8px; background:transparent; color:var(--ink-2); }
+.theme-btn:hover { color:var(--ink); border-color:var(--muted); }
+.theme-btn .ico-moon { display:none; }
+.theme-btn.is-dark .ico-sun { display:none; }
+.theme-btn.is-dark .ico-moon { display:block; }
 
 /* hero */
 .hero { padding-block:56px 24px; }
-.hero-copy { display:grid; gap:18px; max-width:760px; margin-inline:auto; text-align:center; justify-items:center; }
+.hero-copy { display:grid; grid-template-columns:minmax(0,1fr); gap:18px; max-width:760px; margin-inline:auto; text-align:center; justify-items:center; }
  .nb { white-space:nowrap; }
-.hero h1 { font-size:clamp(34px, 5.2vw, 58px); line-height:1.08; font-weight:800; text-wrap:balance; }
-.hero .lede { font-size:clamp(12px, 2.4vw, 18px); color:var(--ink-2); white-space:nowrap; max-width:none; }
+.hero h1 { font-size:clamp(30px, 5.2vw, 58px); line-height:1.08; font-weight:800; text-wrap:balance; }
+.hero .lede { font-size:clamp(15px, 2.2vw, 18px); color:var(--ink-2); text-wrap:balance; max-width:none; }
+@media (min-width:1100px) { .hero .lede { white-space:nowrap; } }
 .cta-row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
 .btn { display:inline-flex; align-items:center; gap:8px; font-weight:600; font-size:15px; text-decoration:none; padding:11px 18px; border-radius:10px; border:0; }
 .btn-primary { background:var(--accent); color:var(--on-accent); }
@@ -95,7 +123,7 @@ body::before { content:""; position:fixed; inset:0 0 auto; height:env(safe-area-
 section.block { padding-block:96px 0; }
 .sec-head { max-width:720px; display:grid; gap:12px; }
 .sec-head h2 { font-size:clamp(28px, 3.6vw, 42px); line-height:1.15; font-weight:800; }
-.sec-head p { color:var(--ink-2); font-size:17px; }
+.sec-head p { color:var(--ink-2); font-size:clamp(15px, 1.8vw, 17px); }
 
 /* mount points for MG22 / MG23 */
 .mount-pending { margin-top:40px; border:1px dashed var(--hair); border-radius:16px; background:var(--surface); padding:44px 24px; text-align:center; color:var(--muted); font-size:15px; }
@@ -135,12 +163,12 @@ section.block { padding-block:96px 0; }
 .rules { margin-top:16px; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; }
 @media (max-width:800px) { .rules { grid-template-columns:minmax(0,1fr); } }
 .rule h3 { font-size:16px; }
-.rule p { font-size:14.5px; color:var(--ink-2); margin-top:6px; }
+.rule p { font-size:15px; color:var(--ink-2); margin-top:6px; }
 
 /* ops：5h 窗口激活（并排时间轴对比 + 播放演示）+ 模型升级（步骤条 + 新旧对照 → 预览 → 落地 → 回滚） */
 .ops { margin-top:36px; display:grid; grid-template-columns:minmax(0,1fr); gap:16px; align-items:start; }
 .ops h3 { font-size:19px; letter-spacing:-0.01em; }
-.ops .sub { font-size:14.5px; color:var(--ink-2); margin-top:6px; max-width:62ch; }
+.ops .sub { font-size:15px; color:var(--ink-2); margin-top:6px; max-width:62ch; }
 
 /* 卡 1：三步说明（编号圆点，手机竖排） */
 .op-how { list-style:none; margin:14px 0 0; padding:0; counter-reset:opstep; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px 16px; }
@@ -182,11 +210,22 @@ section.block { padding-block:96px 0; }
 .op-axis span:first-child { transform:none; } .op-axis span:last-child { transform:translateX(-100%); }
 
 /* 卡 1：结论条 + ▶ 播放 */
+.op-cmp { position:relative; }
+.op-play-fab { display:none; }
 .op-concl { margin-top:18px; display:flex; align-items:center; gap:6px 14px; flex-wrap:wrap; }
 .op-concl p { font-size:15px; color:var(--ink-2); min-width:0; }
-.op-concl b { font:700 28px/1.1 var(--font-display); letter-spacing:-0.01em; color:var(--ok); margin:0 3px; }
+.op-concl b { font:700 28px/1.1 var(--font-display); letter-spacing:-0.01em; color:var(--ok); margin:0 3px; white-space:nowrap; }
 .op-concl button { margin-left:auto; font-size:13px; font-weight:600; padding:8px 14px; border-radius:8px; border:1px solid var(--hair); background:var(--surface); color:var(--ink); }
 .op-concl button:hover { border-color:var(--accent); color:var(--accent); }
+@media (max-width:640px) {
+  .op-concl { flex-wrap:nowrap; }
+  .op-concl p { white-space:nowrap; font-size:clamp(11px, 3.2vw, 13.5px); }
+  .op-concl b { font-size:clamp(15px, 4.6vw, 20px); line-height:1.2; }
+  .op-concl button { display:none; }
+  .op-play-fab { display:inline-flex; align-items:center; gap:6px; position:absolute; bottom:-14px; right:12px; z-index:5;
+    font-size:12.5px; font-weight:600; padding:6px 13px; border-radius:999px; border:1px solid var(--hair);
+    background:var(--surface); color:var(--ink); box-shadow:0 2px 10px rgb(11 11 11 / .12); }
+}
 
 /* 卡 1：说明列表（两列，手机一列） */
 .op-notes { list-style:none; margin:18px 0 0; padding:0; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px 20px; }
@@ -276,11 +315,15 @@ footer a { color:var(--ink-2); }
       <a class="hide-sm" href="#views" data-i18n="nav.views">视图</a>
       <a class="hide-sm" href="#activity" data-i18n="nav.activity">活跃度</a>
       <a class="hide-sm" href="#privacy" data-i18n="nav.privacy">隐私</a>
-      <a data-repo href="https://github.com/summerway/model-gateway"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" style="vertical-align:-2px;margin-right:5px"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a>
+      <a data-repo href="https://github.com/summerway/model-gateway"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" ><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub</a>
       <span class="lang" role="group" aria-label="Language">
         <button type="button" id="lang-zh" data-lang="zh" aria-pressed="true">中</button>
         <button type="button" id="lang-en" data-lang="en" aria-pressed="false">EN</button>
       </span>
+      <button type="button" id="theme-toggle" class="theme-btn" aria-label="切换明暗主题">
+        <svg class="ico-sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.4"/><path d="M12 2.5v2.4M12 19.1v2.4M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.6 19.4l1.7-1.7M17.7 6.3l1.7-1.7"/></svg>
+        <svg class="ico-moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 14.2A8.8 8.8 0 0 1 9.8 3.4a8.8 8.8 0 1 0 10.8 10.8Z"/></svg>
+      </button>
     </nav>
   </div>
 </header>
@@ -289,7 +332,7 @@ footer a { color:var(--ink-2); }
   <section class="hero">
     <div class="wrap">
       <div class="hero-copy">
-        <h1 data-i18n="hero.title">所有 AI 订阅，<span class="nb">一个地址。</span></h1>
+        <h1 data-i18n="hero.title"><span class="nb">所有 AI 订阅，</span><span class="nb">一个地址。</span></h1>
         <p class="lede" data-i18n="hero.lede">Claude、GPT、GLM、DeepSeek —— 按模型智能路由，额度用完自动切换，用量一处看全。</p>
       </div>
 
@@ -325,7 +368,10 @@ footer a { color:var(--ink-2); }
             <li data-i18n="o.s2">网关立刻代发 1 次最小请求</li>
             <li data-i18n="o.s3">新的 5 小时从 14:00 起算</li>
           </ol>
-          <div class="op-tl-scroll"><div class="op-tl" id="op-tl"></div></div>
+          <div class="op-cmp">
+            <div class="op-tl-scroll"><div class="op-tl" id="op-tl"></div></div>
+            <button type="button" class="op-play-fab" data-play data-i18n="o.play">▶ 播放</button>
+          </div>
           <div class="op-concl">
             <p data-i18n="o.concl">同样 18:10 用完，额度早 <b>1 小时 30 分</b> 恢复</p>
             <button type="button" id="op-play" data-i18n="o.play">▶ 播放</button>
@@ -441,8 +487,7 @@ footer a { color:var(--ink-2); }
 
 <footer>
   <div class="wrap">
-    <span>© 2026 maplesnow · MIT License</span>
-    <span>Model prices from <a href="https://models.dev">models.dev</a></span>
+    <span>© 2026 maplesnow · <a href="https://github.com/summerway/model-gateway/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a></span>
   </div>
 </footer>
 
@@ -459,16 +504,16 @@ const EN = {
   'hero.title':'All your AI subscriptions. <span class="nb">One address.</span>',
   'hero.lede':'Claude, GPT, GLM, DeepSeek — smart routing by model, automatic failover when quota runs out, all usage in one place.',
   'cta.repo':'View on GitHub',
-  'v.title':'One dashboard, eight views','v.sub':'Pick a view to see what you’d see every day.','v.pending':'A tour of the eight views will appear here.',
+  'v.title':'One dashboard, eight views','v.sub':'Pick a view to see what you’d see every day.',
   'o.title':'No idle windows. Upgrades on your call.','o.sub':'Each 5-hour window starts the moment the last one resets. When a newer model shows up you get a comparison card — you decide whether to switch.',
   'o.w5':'5-hour window activation',
   'o.s1':'14:00 window resets','o.s2':'Gateway sends one minimal request','o.s3':'The new 5 hours count from 14:00',
-  'o.concl':'Same 18:10 cut-off — quota is back <b>1h 30m</b> sooner','o.play':'▶ Play',
+  'o.concl':'Same 18:10 cut-off, quota back <b>1h 30m</b> sooner','o.play':'▶ Play',
   'o.n1':'Fires once within a minute of the reset, a few dozen tokens each time','o.n2':'Pauses automatically when the weekly quota is used up, resumes after it resets',
   'o.n3':'While you wait, requests follow the fallback chain to other channels','o.n4':'Works with GLM Coding, Codex and Claude subscriptions (Claude via the real Claude Code CLI)',
   'o.upT':'Model upgrades','o.upS':'Every 24 hours the gateway checks models.dev. A newer version in the same family, or a model that looks retired, becomes a model suggestion. By default it only suggests — it never edits your config on its own.',
   'o.f1':'New items arrive as an email digest','o.f2':'The same candidate is never suggested twice','o.f3':'Or tell your AI: “switch Codex from GPT-6 Sol to 6.1”',
-  'a.title':'A year of AI usage, in one chart','a.sub':'Each square is a day. Hover for the numbers.','a.pending':'A year-long usage heatmap will appear here.',
+  'a.title':'A year of AI usage, in one chart','a.sub':'Each square is a day. Hover for the numbers.',
   't.title':'Nothing to manage. Just talk to your AI.','t.sub':'No complex ops or admin panels — plug in any AI client and do it all in one sentence.',
   't.pick':'Pick a request:','t.q0':'Put DeepSeek ahead of GLM','t.q1':'How much did Claude Code use this week?','t.q2':'Make a new key for my note app',
   'p.title':'Counts numbers. Never reads chats.','p.line':'Runs on your own machines. No third-party analytics.',
@@ -660,6 +705,24 @@ let initial = 'zh';
 const qs = new URLSearchParams(location.search).get('lang');
 if (qs === 'en' || qs === 'zh') initial = qs;
 else { try { const s = localStorage.getItem('mg-lang'); if (s === 'en' || s === 'zh') initial = s; } catch {} }
+
+/* ───────── theme toggle ───────── */
+const themeBtn = document.getElementById('theme-toggle');
+const syncThemeBtn = () => {
+  if (!themeBtn) return;
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  themeBtn.classList.toggle('is-dark', dark);
+  themeBtn.title = dark ? T('切换到浅色', 'Switch to light theme') : T('切换到深色', 'Switch to dark theme');
+  themeBtn.setAttribute('aria-label', themeBtn.title);
+};
+themeBtn?.addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('mg-theme', next); } catch {}
+  syncThemeBtn();
+});
+syncThemeBtn();
+listeners.push(syncThemeBtn);
 /* ───────── ops：5h 窗口激活（并排时间轴 + 播放演示）+ 模型升级（步骤条 + 新旧对照），纯本地状态 ───────── */
 const OPS = { act: null, phase: 'idle' };
 const pct = (h) => `${((h - 8) / 16) * 100}%`;
@@ -724,7 +787,7 @@ function opFlash14(gen) {
   setTimeout(() => { if (gen !== playGen) return; ping.classList.remove('hit'); idle.classList.remove('hl'); lab.remove(); }, 1600);
 }
 
-document.getElementById('op-play').addEventListener('click', () => {
+const opPlay = () => {
   const gen = ++playGen; // 再次点击：重置后重新播放
   const tl = document.getElementById('op-tl');
   tl.querySelectorAll('[data-ph]').forEach((p) => p.classList.add('run'));
@@ -742,7 +805,8 @@ document.getElementById('op-play').addEventListener('click', () => {
     else tl.classList.remove('playing');
   };
   requestAnimationFrame(step);
-});
+};
+document.querySelectorAll('[data-play]').forEach((b) => b.addEventListener('click', opPlay));
 
 // 模型升级步骤条：初始 → 2 你决定；点了任一动作 → 3 预览；确认落地 → 4；放弃走到 3 后第 4 步改「已放弃」
 function renderOpsSteps() {
