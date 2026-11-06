@@ -1,7 +1,7 @@
 // config.js — config directory loader + validation + env secret refs.
 // Layout (see config/config.example.yaml):
 //   providers[]: {id, type, baseUrl, apiKeyRef, models[], anthropicBaseUrl?}
-//   gateway:     {host, port, keys[]} — keys 条目为字符串或 {key, app, note?}（per-app 归因）
+//   gateway:     {host, port, keys[]} — keys 条目为字符串或 {key, app, device?, note?}（per-app × 设备归因）
 //   jobs:        {probe{...}, activate{...}}
 //   notify:      {smtpUrl, from?, to?}
 // apiKeyRef resolves at runtime: "env:VAR" / "env:VAR:default".
@@ -381,17 +381,23 @@ export function validateConfig(raw, { source = 'config' } = {}) {
       } else if (k && typeof k === 'object' && !Array.isArray(k) &&
         typeof k.key === 'string' && k.key.length > 0) {
         keys.push({ key: k.key, app: k.app === undefined ? 'shared' : k.app,
+          ...(k.device !== undefined ? { device: k.device } : {}),
           ...(k.note !== undefined ? { note: k.note } : {}) });
       } else {
-        errors.push(`gateway.keys[${i}]: must be non-empty string or {key, app, note?}`);
+        errors.push(`gateway.keys[${i}]: must be non-empty string or {key, app, device?, note?}`);
         return;
       }
       const entry = keys.at(-1);
       const where = `gateway.keys[${i}]`;
+      // device（MG26）：agent × 设备一把 key；(app, device) 组合唯一，同 app 可在多台设备各一把
+      if (entry.device !== undefined && (typeof entry.device !== 'string' || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(entry.device))) {
+        errors.push(`${where}.device: must match ^[a-z0-9][a-z0-9-]{0,31}$`);
+      }
+      const appKey = `${entry.app}@${entry.device ?? ''}`;
       if (typeof entry.app !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(entry.app)) {
         errors.push(`${where}.app: must match ^[a-z0-9][a-z0-9-]*$`);
-      } else if (seenApps.has(entry.app)) errors.push(`${where}.app: duplicate app "${entry.app}"`);
-      seenApps.add(entry.app);
+      } else if (seenApps.has(appKey)) errors.push(`${where}.app: duplicate app "${entry.app}"${entry.device ? ` on device "${entry.device}"` : ''}`);
+      seenApps.add(appKey);
       if (entry.note !== undefined && typeof entry.note !== 'string') errors.push(`${where}.note: must be string`);
       // env:VAR 与 env:VAR:default 均引用同一变量；报错不泄露字面量 key。
       const refId = entry.key.startsWith('env:') ? entry.key.split(':').slice(0, 2).join(':') : entry.key;
@@ -612,6 +618,13 @@ export function validateConfig(raw, { source = 'config' } = {}) {
       return { name: device.name, keyRef: device.keyRef };
     });
   }
+  // 设备心跳（MG27）：入网 key 只允许上报心跳（标「待注册」）；offlineAfterSec = 判离线阈值（默认 900）
+  if (receiverRaw?.enrollKeyRef !== undefined) {
+    if (typeof receiverRaw.enrollKeyRef !== 'string' || !secretRef.test(receiverRaw.enrollKeyRef)) throw new ConfigError('observedUsage.enrollKeyRef: expected env:VARIABLE');
+    observedUsage.enrollKeyRef = receiverRaw.enrollKeyRef;
+  }
+  observedUsage.offlineAfterSec = receiverRaw?.offlineAfterSec ?? 900;
+  if (!Number.isInteger(observedUsage.offlineAfterSec) || observedUsage.offlineAfterSec < 60) throw new ConfigError('observedUsage.offlineAfterSec: integer >= 60');
   if (typeof observedUsage.enabled !== 'boolean' || (observedUsage.enabled && !observedUsage.apiKeyRef && !observedUsage.devices?.length)) throw new ConfigError('observedUsage: enabled requires apiKeyRef: env:VARIABLE or devices');
   const codexUsage = observedUsage;
   // Agent 端点映射来源：skills 仓 distribution.json（只读挂载）；缺省 = 不读取，页面全部归为业务应用

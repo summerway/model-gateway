@@ -142,6 +142,9 @@ export function buildDashboardData({ catalog, events, quotaStore, registry, last
       statusReason,
       // 健康依据：有凭据验证记录 → credentials；否则配置静态判定 → configuration（不再上报 unknown）
       healthBasis: reg && typeof reg.healthy === 'boolean' ? 'credentials' : 'configuration',
+      // 额度形态：订阅类（GLM / Codex / Claude）出 5h+周窗口，其余探测出余额。探测失败、无快照时
+      // 前端仍按形态把卡片放进对应分区并显示失败原因，不让渠道从概览上「消失」
+      quotaKind: ['glm', 'codex', 'claude'].includes(p.type) ? 'tiers' : 'balance',
       probe: {
         supported: quotaStore?.probeIds?.().includes(p.id) ?? Object.hasOwn(quotaSnap, p.id),
         ok: q?.ok === true,

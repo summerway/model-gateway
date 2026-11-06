@@ -65,6 +65,7 @@
                 "properties": {
                   "key": { "type": "string", "minLength": 1, "description": "通常为 env:VAR" },
                   "app": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "description": "调用方 slug；与 skills 仓 distribution.json 的 endpoint id 一致时显示为 Agent" },
+                  "device": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "调用方所在设备（distribution.json devices 的 id）；agent key 必填，业务应用可选；served 用量按它归属设备" },
                   "note": { "type": "string", "description": "客户端配置位置（只在配置里，不在页面显示）" }
                 }
               }
@@ -247,6 +248,8 @@
       "properties": {
         "enabled": { "type": "boolean", "default": false },
         "apiKeyRef": { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$" },
+        "enrollKeyRef": { "type": "string", "pattern": "^env:[A-Z_][A-Z0-9_]*$", "description": "共享入网 key：只允许 POST /internal/devices/heartbeat，设备标「待注册」，不能推送用量" },
+        "offlineAfterSec": { "type": "integer", "minimum": 60, "default": 900, "description": "距最近一次心跳超过该秒数判离线（device-agent 默认 300s 一次心跳）" },
         "devices": {
           "type": "array",
           "items": {

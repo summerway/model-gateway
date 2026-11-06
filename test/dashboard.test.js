@@ -637,7 +637,9 @@ test('quota card: quota 完全缺失与正余额熔断形态（评审 #2/#3 补�
   // quota 完全缺失（claude 凭据 ENOENT 现役场景）+ half_open：主体空、芯片照常渲染
   const noData = quotaCard({ ...base, circuit: { phase: 'half_open' } });
   assert.match(noData, /恢复试探/);
-  assert.match(noData, /<div class="q-body"><\/div>/, 'body renders empty, not missing');
+  assert.match(noData, /<div class="q-body"><div class="q-error">[\s\S]*额度暂不可用[\s\S]*credentials: ENOENT/, 'body shows why quota is missing (2026-11-06：Claude 凭据失效时卡片不再空白/消失)');
+  // 无熔断时：探测失败芯片
+  assert.match(quotaCard(base), /chip crit[\s\S]*探测失败<\/span><\/div>/);
   assert.match(noData, /探测失败/);
   // 正余额 + half_open：主体显示余额（非 meter），芯片为状态
   const bal = quotaCard({ ...base, id: 'dashscope', type: 'dashscope', circuit: { phase: 'half_open' }, quota: { balance: { currency: 'CNY', total: '19.68', cash: '19.68' } } });

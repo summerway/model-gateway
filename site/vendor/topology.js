@@ -20,7 +20,7 @@ const DEFAULT_LABELS = {
   pause: '暂停模拟演示',
   svgLabel: '来源、网关、渠道与模型连接结构',
   chainTip: 'fallback 链：同色胶囊与虚线弧为同一链',
-  device: { mac: 'Mac', nas: 'NAS', unknown: '位置未知' },
+  device: { mac: 'Mac', 'mac-mini': 'Mac mini', nas: 'NAS', unknown: '位置未知' },
   apps: '应用',
   gateway: '网关',
   collector: label => `流量采集器（${label}）`,
@@ -42,7 +42,8 @@ function build(data, labelOverride) {
  const edge=(a,b,type='call')=>{const id=JSON.stringify([a,b,type]);if(!edges.some(x=>x.id===id))edges.push({id,a,b,type});return id;};
  const agents=new Map((data.agents??[]).map(a=>[a.app,a]));
  const sources=new Map();
- const source=(app,device)=>{const a=agents.get(app);device=device??({local:'mac',cloud:'nas'}[a?.location]??'unknown');const id=JSON.stringify(['source',app,device]);add({id,type:'source',app,device,label:a?.iconKind==='pi'?'Pi':a?.iconKind==='claudecode'?'Claude Code':a?.iconKind==='codex'?'Codex':a?.iconKind==='openclaw'?'OpenClaw':app,icon:a?.iconKind??(/claude/.test(app)?'claudecode':/codex/.test(app)?'codex':null)});sources.set(app,id);return id;};
+ // 来源节点 = app × 设备（MG29）：key 声明的 device 优先；v1 注册表无 device → 按 location 推 mac/nas。
+ const source=(app,device)=>{const a=agents.get(app);device=device??({local:'mac',cloud:'nas'}[a?.location]??'unknown');const id=JSON.stringify(['source',app,device]);add({id,type:'source',app,device,label:a?.label??(a?.iconKind==='pi'?'Pi':a?.iconKind==='claudecode'?'Claude Code':a?.iconKind==='codex'?'Codex':a?.iconKind==='openclaw'?'OpenClaw':app),icon:a?.iconKind??(/claude/.test(app)?'claudecode':/codex/.test(app)?'codex':null)});sources.set(app,id);return id;};
  add({id:'gateway',type:'gateway',label:'Model Gateway',image:'gateway'});
  const grouped=new Map();
  for(const g of cfg.appGroups??[]) for(const app of g.apps)grouped.set(app,g);
@@ -50,7 +51,7 @@ function build(data, labelOverride) {
  for(const k of data.keys??[]) {
   let id;
   const directSource=(cfg.directConnections??[]).find(c=>c.app===k.app);
-  if(agents.has(k.app)||directSource)id=source(k.app,agents.has(k.app)?undefined:directSource.device);
+  if(agents.has(k.app)||directSource)id=source(k.app,agents.has(k.app)?(k.device??undefined):directSource.device);
   else {
    // 未归类的 key 不上拓扑：「其他应用」分组已移除。
    const g=grouped.get(k.app);
@@ -107,7 +108,8 @@ function build(data, labelOverride) {
     routes.push({ nodes: [...invocation.nodes, ...tailNodes], edges: [...invocation.edges, ...tail], branches });
   }
  }
- return {nodes,edges,routes};
+ // 设备注册表（distribution.json v2 devices）：泳道标题 = 设备 Tag，顺序 = 注册顺序
+ return {nodes,edges,routes,devices:(data.deviceRegistry??[]).map(({id,label,platform})=>({id,label,platform}))};
 }
 
 let selected = null;
@@ -229,20 +231,24 @@ const imgGlyph = (href, x, y, s, cls = '', filter = '') =>
 function layout(graph) {
   const positions = new Map();
   const regions = [];
-  const devices = [...new Set(graph.nodes.filter(n => n.type === 'source').map(n => n.device))]
-    .sort((a, b) => (a === 'mac' ? 0 : a === 'nas' ? 1 : 2) - (b === 'mac' ? 0 : b === 'nas' ? 1 : 2));
-  const deviceLabel = device => (L.device[device] ?? device);
+  // 泳道：注册设备按注册顺序在前，其余（v1 的 mac/nas、直连声明的设备）随后
+  const reg = new Map((graph.devices ?? []).map((d, i) => [d.id, { ...d, i }]));
+  const rank = d => reg.has(d) ? reg.get(d).i : reg.size + (d === 'mac' ? 0 : d === 'nas' ? 1 : 2);
+  const devices = [...new Set(graph.nodes.filter(n => n.type === 'source').map(n => n.device))].sort((a, b) => rank(a) - rank(b));
+  const deviceLabel = device => (reg.get(device)?.label ?? L.device[device] ?? device);
+  // 图标与配色按平台（mac / nas）；未注册设备沿用其 id
+  const regionKind = device => reg.get(device)?.platform ?? device;
 
   // Source column (Mac / NAS / 应用) is measured first so the whole stack can be
   // vertically centered against the full canvas — the provider column is usually
   // taller and a top-aligned source column reads unbalanced.
   const column = [];
-  const collect = (label, members, device) => {
-    if (members.length) column.push({ label, device, members, h: 42 + members.length * 58 });
+  const collect = (label, members, device, kind = device) => {
+    if (members.length) column.push({ label, device: kind, id: device, members, h: 42 + members.length * 58 });
   };
   for (const device of devices) {
     collect(deviceLabel(device),
-      graph.nodes.filter(n => n.type === 'source' && n.device === device), device);
+      graph.nodes.filter(n => n.type === 'source' && n.device === device), device, regionKind(device));
   }
   collect(L.apps, graph.nodes.filter(n => n.type === 'group'), 'apps');
   const gap = 18;
@@ -260,7 +266,7 @@ function layout(graph) {
   const height = Math.max(390, leftTotal + 40, providerY + 16);
   let y = Math.max(28, Math.round((height - leftTotal) / 2));
   for (const block of column) {
-    regions.push({ label: block.label, device: block.device, x: 20, y, w: 280, h: block.h });
+    regions.push({ label: block.label, device: block.device, id: block.id, x: 20, y, w: 280, h: block.h });
     block.members.forEach((node, index) => positions.set(node.id, { x: 36, y: y + 34 + index * 58, w: 248, h: 48 }));
     y += block.h + gap;
   }
@@ -353,11 +359,13 @@ function html(data, helpers = {}) {
   // Line icons for the source regions; color follows each region's label tint.
   const regionIcons = {
     mac: '<rect x="2.2" y="2.8" width="11.6" height="8" rx="1.2"/><path d="M1 13.2h14"/>',
+    'mac-mini': '<rect x="3" y="5" width="10" height="6" rx="1.4"/><circle cx="11.4" cy="8" r=".6" fill="currentColor" stroke="none"/>',
     nas: '<rect x="2.2" y="2" width="11.6" height="5.2" rx="1.1"/><rect x="2.2" y="8.8" width="11.6" height="5.2" rx="1.1"/><circle cx="4.6" cy="4.6" r=".6" fill="currentColor" stroke="none"/><circle cx="4.6" cy="11.4" r=".6" fill="currentColor" stroke="none"/>',
     apps: '<rect x="2" y="2" width="5" height="5" rx="1.1"/><rect x="9" y="2" width="5" height="5" rx="1.1"/><rect x="2" y="9" width="5" height="5" rx="1.1"/><rect x="9" y="9" width="5" height="5" rx="1.1"/>',
   };
   const backgrounds = regions.map(r => {
-    const icon = regionIcons[r.device];
+    // 设备 id 有专属图标（如 mac-mini）优先，否则按平台（mac / nas），未知回退应用图标
+    const icon = regionIcons[r.id] ?? regionIcons[r.device] ?? regionIcons.apps;
     return `<g class="tp-region tp-region-${esc(r.device)}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="15" fill="url(#tp-region-fill)" stroke="var(--hair)"/>${icon ? `<svg class="tp-region-icon" x="${r.x + 14}" y="${r.y + 11}" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${icon}</svg>` : ''}<text x="${r.x + (icon ? 32 : 16)}" y="${r.y + 22}" class="tp-section">${esc(r.label)}</text></g>`;
   }).join('');
   let glowN = 0;

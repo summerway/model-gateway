@@ -32,6 +32,21 @@ USAGE_SYNC_DEVICE=win-pc
 
 设备名优先级是 `--device NAME` > `USAGE_SYNC_DEVICE` > 主机名规范化值（小写，将特殊字符替换为 `-`，最长 32 位）；使用设备 token 时应与网关绑定名保持一致。
 
+## 设备代理（device-agent）
+
+同一个定时任务还可以兼任设备代理：每轮先跑前置钩子（例如拉取 skills 仓并收敛本机技能端点），再向网关上报设备心跳（硬件 UUID、主机名、型号、检测到的 agent、钩子结果），最后推送用量。网关据此在设备页显示在线状态（默认 15 分钟无心跳判离线），未注册的设备进入注册流程。环境文件可选键：
+
+```text
+# 未注册设备：只持共享入网 key（网关 observedUsage.enrollKeyRef），只能发心跳，不推用量
+DEVICE_ENROLL_KEY=YOUR_ENROLL_KEY
+# 每轮前置命令（sh -c 执行，超时 120 秒；失败不影响心跳与用量）
+COLLECT_PRE_HOOK=cd ~/WorkSpace/Projects/skills && git pull --ff-only -q && python3 scripts/converge.py apply --self
+# agent 检测规则来源：distribution.json v2 的 agents[*].detect
+SKILLS_DISTRIBUTION=/Users/me/WorkSpace/Projects/skills/distribution.json
+```
+
+配置了以上任一键即启用心跳（`COLLECT_HEARTBEAT=0` 关闭，`=1` 强制开启）。注册确认后换发设备 token：把 `USAGE_SYNC_KEY` 改为设备 token，删除 `DEVICE_ENROLL_KEY`。硬件 UUID 读取失败时可设 `DEVICE_UUID`；`DEVICE_PLATFORM` 覆盖上报的平台（如 NAS 上设为 `nas`）。
+
 ## macOS
 
 ```sh

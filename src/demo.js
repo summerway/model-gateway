@@ -55,6 +55,27 @@ const MODELS = {
   'claude-haiku-5-5': { name: 'Claude Haiku 5.5', input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },
 };
 
+/** 演示用设备 / agent / 端点注册表（distribution.json v2 形态，MG29）。 */
+export const DEMO_DISTRIBUTION = {
+  version: 2,
+  agents: {
+    'claude-code': { label: 'Claude Code', icon: 'claudecode' },
+    openclaw: { label: 'OpenClaw', icon: 'openclaw' },
+    codex: { label: 'Codex', icon: 'codex' },
+  },
+  devices: {
+    macbook: { label: 'MacBook', platform: 'mac' },
+    'linux-box': { label: 'Linux Box', platform: 'nas' },
+    'windows-pc': { label: 'Windows PC', platform: 'windows' },
+  },
+  endpoints: {
+    'claude-code': { agent: 'claude-code', devices: ['macbook'], dir: '~/.claude/skills' },
+    openclaw: { agent: 'openclaw', devices: ['linux-box'], dir: '/srv/openclaw/skills' },
+    codex: { agent: 'codex', devices: ['macbook'], dir: '~/.codex/skills' },   // 订阅直连，无网关 key
+  },
+  skills: {},
+};
+
 export function seedDemo({ usageLog, events, quotaProbe, activator, inbox, pricing, now = Date.now() }) {
   const stamp = ms => new Date(ms).toISOString();
   pricing.overrides = normalizeOverrides(MODELS);
@@ -135,5 +156,13 @@ export function seedDemo({ usageLog, events, quotaProbe, activator, inbox, prici
   events.record('fallback', { ts: stamp(now - 12 * 60000), model: 'glm-5.3', from: 'glm-coding', to: 'openrouter', status: 429 });
   events.record('probe_error', { ts: stamp(now - 9 * 60000), providerId: 'deepseek', error: 'HTTP 503，稍后重试', failures: 1 });
   events.record('model_inbox_pending', { ts: stamp(now - 5 * 60000), providerId: 'codex', model: 'gpt-6.1-sol' });
+  // 设备心跳：两台在线、一台离线、一台待注册（UUID 为演示占位）
+  const at = (ms, fn) => { const saved = usageLog.now; usageLog.now = () => ms; try { fn(); } finally { usageLog.now = saved; } };
+  for (const [uuid, device, ago, payload] of [
+    ['DEMO-0000-MACBOOK', 'macbook', 2, { hostname: 'macbook.local', model: 'MacBookPro18,3', platform: 'mac', agents: [{ agent: 'claude-code' }, { agent: 'codex' }], converge: { ok: true, changed: 0, at: stamp(now - 2 * 60000) } }],
+    ['DEMO-0000-LINUXBOX', 'linux-box', 4, { hostname: 'linux-box', model: null, platform: 'nas', agents: [{ agent: 'openclaw' }] }],
+    ['DEMO-0000-WINDOWS', 'windows-pc', 190, { hostname: 'windows-pc', model: null, platform: 'windows', agents: [] }],
+    ['DEMO-0000-NEWMAC', null, 1, { hostname: 'mac-studio.local', model: 'Mac16,9', platform: 'mac', agents: [{ agent: 'claude-code' }] }],
+  ]) at(now - ago * 60000, () => usageLog.upsertPresence({ uuid, device, payload }));
   events.record('demo_seeded', { ts: stamp(now), records, days: 90 });
 }

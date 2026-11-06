@@ -5,10 +5,12 @@ gateway:
   keys:
     - key: env:MODEL_GATEWAY_DEMO_CLAUDE_KEY
       app: claude-code
+      device: macbook
     - key: env:MODEL_GATEWAY_DEMO_CODEX_KEY
       app: codex-cli
     - key: env:MODEL_GATEWAY_DEMO_OPENCLAW_KEY
       app: openclaw
+      device: linux-box
     - key: env:MODEL_GATEWAY_DEMO_NOTEBOOK_KEY
       app: notebook
     - key: env:MODEL_GATEWAY_DEMO_AUTOMATION_KEY

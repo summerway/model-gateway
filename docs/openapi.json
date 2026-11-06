@@ -659,6 +659,134 @@
           }
         }
       }
+    },
+    "/devices": {
+      "get": {
+        "summary": "Registered devices (skills distribution.json v2) joined with heartbeat presence, plus unregistered heartbeats awaiting enrollment. Online = last heartbeat within offlineAfterSec.",
+        "responses": {
+          "200": {
+            "description": "Device view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "devices",
+                    "unregistered",
+                    "offlineAfterSec"
+                  ],
+                  "properties": {
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "platform": {
+                            "type": "string"
+                          },
+                          "uuid": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "description": "注册的硬件 UUID（null = 待补）"
+                          },
+                          "heartbeatUuid": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "匹配到的心跳上报的硬件 UUID（uuidPending 时用它补齐注册表）"
+                        },
+                        "uuidPending": {
+                            "type": "boolean",
+                            "description": "注册表无 uuid 且已按 token 名匹配到心跳：可用心跳 uuid 补齐"
+                          },
+                          "online": {
+                            "type": "boolean"
+                          },
+                          "lastSeen": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "hostname": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "model": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "endpoints": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "detected": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "agent": {
+                                  "type": "string"
+                                },
+                                "path": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          },
+                          "unboundAgents": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          },
+                          "converge": {
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "unregistered": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "description": "未匹配注册设备的心跳（uuid、hostname、model、platform、detected）"
+                      }
+                    },
+                    "offlineAfterSec": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   }
 }

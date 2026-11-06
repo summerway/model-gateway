@@ -13,6 +13,7 @@ import { sourceById } from './sources/index.js';
 import { validateSchema } from '../config-schema.js';
 import { isPseudoModelId } from './pricing.js';
 import { UNMARKED_CLIENT, localDay, normalizeClient } from './store.js';
+import { buildDeviceView, normalizeHeartbeat } from './devices.js';
 
 /** usage 明细分页白名单 50/100/200；白名单外回退默认。 */
 const LOG_LIMITS = [50, 100, 200];
@@ -60,7 +61,13 @@ export function rangeToWindow(range, now = new Date()) {
 export function createMonitorRoutes(ctx) {
   const { config, catalog, displayCatalog, usageLog, pricing, keyStates, keyApps } = ctx;
   // Agent 映射（distribution.json）；未注入 → 空映射 + 未配置
-  const agentSnap = () => ctx.agentEndpoints?.snapshot() ?? { agents: [], source: { configured: false, loadedAt: null, stale: false, error: null } };
+  const agentSnap = () => ctx.agentEndpoints?.snapshot() ?? { agents: [], devices: [], source: { configured: false, version: null, loadedAt: null, stale: false, error: null } };
+  const offlineAfterSec = (config.observedUsage ?? config.codexUsage)?.offlineAfterSec ?? 900;
+  const deviceSnapshot = (detail) => {
+    const registry = ctx.agentEndpoints?.registry?.() ?? { version: null, agents: [], devices: [] };
+    const view = buildDeviceView({ registry, presence: usageLog?.listPresence?.() ?? [], offlineAfterSec, detail });
+    return { ...view, offlineAfterSec, source: agentSnap().source };
+  };
   const usageCache = new Map();
   let cachedCatalog = catalog.providers;
   return async function monitorRoute(req, res, url, path) {
@@ -96,15 +103,65 @@ export function createMonitorRoutes(ctx) {
       try { const imported = usageLog.importSubscription(rows); return sendJson(res,200,{accepted:rows.length,imported}); }
       catch { return sendJson(res,503,{error:'用量持久化失败，请稍后重试'}); }
     }
+    // MG27 设备心跳：设备 token（绑定设备名）/ 入网 key（待注册）/ 旧 apiKeyRef（不绑定）；只写 presence
+    if (path === '/internal/devices/heartbeat') {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
+      if (!isInternalRequest(req)) return sendJson(res, 403, { error: 'internal only' });
+      const receiver = config.observedUsage ?? config.codexUsage;
+      if (!receiver?.enabled || !usageLog) return sendJson(res, 404, { error: '设备心跳接收未启用' });
+      let boundDevice = req.mgEnroll ? null : (req.mgDevice ?? null);
+      if (req.mgAuthorized !== true && req.mgDevice === undefined && !req.mgEnroll) {
+        // legacy（IP 信任）模式：auth 未预先判定，按 key 匹配
+        const actual = extractKey(req);
+        const digest = v => createHash('sha256').update(v).digest();
+        const matches = (ref) => { const expected = resolveRef(ref); return expected && actual && timingSafeEqual(digest(expected), digest(actual)); };
+        const device = receiver.devices?.find((entry) => matches(entry.keyRef));
+        if (!device && !matches(receiver.apiKeyRef) && !matches(receiver.enrollKeyRef)) return sendJson(res, 401, { error: 'unauthorized' });
+        boundDevice = device?.name ?? null;
+      }
+      if (!req.headers['content-type']?.startsWith('application/json')) return sendJson(res, 415, { error: 'expected application/json' });
+      let beat;
+      try { beat = normalizeHeartbeat(JSON.parse(await readBody(req, 64 * 1024))); }
+      catch { return sendJson(res, 400, { error: '无效的心跳' }); }
+      const { uuid, ...payload } = beat;
+      let saved;
+      try { saved = usageLog.upsertPresence({ uuid, device: boundDevice, payload }); }
+      catch { return sendJson(res, 503, { error: '心跳持久化失败，请稍后重试' }); }
+      if (saved?.ok === false) return sendJson(res, saved.reason === 'uuid_bound' ? 409 : 429, { error: saved.reason === 'uuid_bound' ? '该硬件 UUID 已绑定其他设备' : '待注册设备过多' });
+      return sendJson(res, 200, { ok: true, device: boundDevice, enrolled: boundDevice !== null });
+    }
+    // 看板设备页：注册设备 ⨝ 在场（不含 UUID 与本机路径）
+    if (path === '/internal/devices' && req.method === 'GET') {
+      if (!isInternalRequest(req)) return sendJson(res, 403, { error: 'forbidden: internal only' });
+      // detail 只由 admin 路由（admin key 已校验）打标；看板会话 / 免登录读取永远是精简视图
+      return sendJson(res, 200, deviceSnapshot(req.mgDeviceDetail === true), { 'cache-control': 'no-store' });
+    }
     if (path === '/internal/keys' && req.method === 'GET') {
       if (!isInternalRequest(req)) return sendJson(res, 403, { error: 'forbidden: internal only' });
       const clients = groupCodexClients(usageLog?.queryClients(rangeToWindow('today')) ?? []);
       const byClient = new Map(clients.map((c) => [c.client, c]));
       const apps = new Set(keyApps());
-      const { agents, source } = agentSnap();
+      const { agents, devices = [], source } = agentSnap();
       const agentOf = new Map(agents.map((a) => [a.app, a]));
+      const deviceOf = new Map(devices.map((d) => [d.id, d]));
+      // agent × 设备 key 的今日用量：served 记录按 key.device 归属（MG26），从日聚合按 client+device 取
+      const today = localDay(Date.now());
+      // 带设备的 key：最近使用按 app × device 取（同 app 多设备各一把 key，不能共用 app 级时间）
+      const lastByDevice = new Map(keyStates.some((k) => k.device)
+        ? (usageLog?.lastServedByClientDevice?.() ?? []).map((r) => [`${r.client}@${r.device}`, r.lastSeen]) : []);
+      const perDevice = new Map();
+      if (keyStates.some((k) => k.device)) {
+        for (const r of usageLog?.queryDaily({ from: today, to: today, kind: 'served' }) ?? []) {
+          const id = `${r.client}@${r.device}`;
+          const t = perDevice.get(id) ?? { requests: 0, tokens: 0 };
+          t.requests += r.requests;
+          t.tokens += r.usage.input + r.usage.output + r.usage.cacheRead + r.usage.cacheWrite;
+          perDevice.set(id, t);
+        }
+      }
       return sendJson(res, 200, {
         agents,
+        devices,
         agentSource: source,
         topology: {
           appGroups: (config.topology?.appGroups ?? []).map(({ id, label, icon, apps }) => ({ id, label, ...(icon === undefined ? {} : { icon }), apps })),
@@ -112,8 +169,10 @@ export function createMonitorRoutes(ctx) {
           directConnections: (config.topology?.directConnections ?? []).map(({ app, device, providerId, collectorId }) => ({ app, device, providerId, ...(collectorId === undefined ? {} : { collectorId }) })),
         },
         keys: keyStates.map((k) => ({
-          ...k, agent: agentOf.get(k.app) ?? null, lastSeen: byClient.get(k.app)?.lastSeen ?? null,
-          today: byClient.get(k.app)?.today ?? { requests: 0, tokens: 0 },
+          ...k, agent: agentOf.get(k.app) ?? null,
+          deviceInfo: k.device ? (deviceOf.get(k.device) ?? { id: k.device, label: k.device, platform: null }) : null,
+          lastSeen: k.device ? (lastByDevice.get(`${k.app}@${k.device}`) ?? null) : (byClient.get(k.app)?.lastSeen ?? null),
+          today: k.device ? (perDevice.get(`${k.app}@${k.device}`) ?? { requests: 0, tokens: 0 }) : (byClient.get(k.app)?.today ?? { requests: 0, tokens: 0 }),
         })),
         extraClients: clients.filter((c) => !apps.has(c.client)).map((c) => ({
           client: c.client, lastSeen: c.lastSeen, today: c.today,
@@ -289,6 +348,7 @@ function displayModelFilter(pricing) {
         // 全局模型标准展示名（models.dev name）：前端所有展示位单点取用，避免各处自行拼装
         modelNames: pricing?.namesSnapshot?.() ?? null, // 测试桩/旧版可能不带 namesSnapshot
         agents: agentSnap().agents,
+        devices: agentSnap().devices ?? [],
         ...data,
       };
       const body = JSON.stringify(response);

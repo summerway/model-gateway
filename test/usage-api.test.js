@@ -97,11 +97,11 @@ test('/internal/keys: 配置顺序、missing/conflict 自检、脱敏、当日�
   const { status, data } = await internalCall(handler, '/internal/keys');
   assert.equal(status, 200);
   assert.deepEqual(data.keys, [
-    { agent: null, app: 'pi-agent', note: 'models.json', status: 'ok', masked: '…1234', lastSeen: new Date(now - 1000).toISOString(), today: { requests: 2, tokens: 20 } },
-    { agent: null, app: 'mac-pi', note: 'Mac models.json', status: 'missing', masked: null, lastSeen: null, today: { requests: 0, tokens: 0 } },
-    { agent: null, app: 'openclaw', note: null, status: 'conflict', masked: '…1234', lastSeen: null, today: { requests: 0, tokens: 0 } },
-    { agent: null, app: 'shared', note: '', status: 'ok', masked: '…5678', lastSeen: null, today: { requests: 0, tokens: 0 } },
-    { agent: null, app: 'codex', note: null, status: 'ok', masked: '…9012', lastSeen: null, today: { requests: 0, tokens: 0 } },
+    { agent: null, device: null, deviceInfo: null, app: 'pi-agent', note: 'models.json', status: 'ok', masked: '…1234', lastSeen: new Date(now - 1000).toISOString(), today: { requests: 2, tokens: 20 } },
+    { agent: null, device: null, deviceInfo: null, app: 'mac-pi', note: 'Mac models.json', status: 'missing', masked: null, lastSeen: null, today: { requests: 0, tokens: 0 } },
+    { agent: null, device: null, deviceInfo: null, app: 'openclaw', note: null, status: 'conflict', masked: '…1234', lastSeen: null, today: { requests: 0, tokens: 0 } },
+    { agent: null, device: null, deviceInfo: null, app: 'shared', note: '', status: 'ok', masked: '…5678', lastSeen: null, today: { requests: 0, tokens: 0 } },
+    { agent: null, device: null, deviceInfo: null, app: 'codex', note: null, status: 'ok', masked: '…9012', lastSeen: null, today: { requests: 0, tokens: 0 } },
   ]);
   assert.deepEqual(data.extraClients.map((c) => c.client).sort(), ['claude-code', null, 'retired-app'].sort());
   const retired = data.extraClients.find((c) => c.client === 'retired-app');
@@ -134,9 +134,9 @@ test('/internal/keys: 与 usage 共用内部 IP 门禁，外部 IP 即使携 key
   }
   const empty = await internalCall(handler, '/internal/keys');
   assert.deepEqual(empty.data, {
-    agents: [], agentSource: { configured: false, loadedAt: null, stale: false, error: null },
+    agents: [], devices: [], agentSource: { configured: false, version: null, loadedAt: null, stale: false, error: null },
     topology: { appGroups: [], collectors: [], directConnections: [] },
-    keys: [{ app: 'shared', agent: null, note: null, status: 'ok', masked: '…-key', lastSeen: null, today: { requests: 0, tokens: 0 } }], extraClients: [],
+    keys: [{ app: 'shared', device: null, deviceInfo: null, agent: null, note: null, status: 'ok', masked: '…-key', lastSeen: null, today: { requests: 0, tokens: 0 } }], extraClients: [],
   });
 });
 
@@ -628,4 +628,30 @@ test('daily: 谓词接模型 id 而非整行；零 token 失败模型不进模�
   } finally {
     gw.server.close();
   }
+});
+
+test('MG26：agent × 设备 key —— served 记录按 key.device 归属设备，/internal/keys 今日用量按 app×device 拆分', async () => {
+  const usageLog = new UsageLog({ file: null });
+  const config = validateConfig({
+    gateway: { keys: [
+      { key: 'mg26-key-mini', app: 'claude-code', device: 'mac-mini' },
+      { key: 'mg26-key-book', app: 'claude-code', device: 'macbook' },
+      { key: 'mg26-key-biz', app: 'karakeep' },
+    ] },
+    providers: [{ id: 'p', type: 'openai', baseUrl: 'http://localhost:1/v1/chat/completions', apiKeyRef: 'env:UPSTREAM', models: ['m1'] }],
+    jobs: { activate: { enabled: false } },
+  });
+  const gw = await gateway({ config, catalog: { providers: [] }, usageLog });
+  try {
+    for (const key of ['mg26-key-mini', 'mg26-key-book', 'mg26-key-book', 'mg26-key-biz']) {
+      await call(gw.url, '/v1/chat/completions', { method: 'POST', key, body: { model: 'm1', messages: [] } });
+    }
+  } finally { gw.server.close(); }
+  assert.deepEqual(usageLog.buf.map((r) => `${r.client}@${r.device}`), ['claude-code@mac-mini', 'claude-code@macbook', 'claude-code@macbook', 'karakeep@gateway']);
+  const handler = createRequestHandler({ config, catalog: { providers: [] }, events: new EventLog(10), usageLog });
+  const { data } = await internalCall(handler, '/internal/keys');
+  assert.deepEqual(data.keys.map((k) => `${k.app}@${k.device}:${k.today.requests}`), ['claude-code@mac-mini:1', 'claude-code@macbook:2', 'karakeep@null:1']);
+  const last = Object.fromEntries(data.keys.map((k) => [`${k.app}@${k.device}`, k.lastSeen]));
+  assert.equal(last['claude-code@mac-mini'], usageLog.buf[0].ts, '每把设备 key 的最近使用各自独立');
+  assert.equal(last['claude-code@macbook'], usageLog.buf[2].ts);
 });

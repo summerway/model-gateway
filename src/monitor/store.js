@@ -93,7 +93,12 @@ CREATE TABLE IF NOT EXISTS usage_daily (
   cache_read INTEGER NOT NULL DEFAULT 0, cache_write INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, kind, client, provider_id, model, upstream_model, device)
 );
+CREATE TABLE IF NOT EXISTS device_presence (
+  uuid TEXT PRIMARY KEY, device TEXT, first_ms INTEGER NOT NULL, last_ms INTEGER NOT NULL, payload TEXT NOT NULL
+);
 `;
+
+const PRESENCE_UNBOUND_MAX = 50;
 
 const COLS = 'ts, kind, device, path, client, provider_id, model, upstream_model, stream, status, ok, latency_ms, has_usage, reported, input, output, cache_read, cache_write, client_abort, ua, event_id';
 
@@ -517,6 +522,121 @@ export class UsageLog {
       FROM usage_records GROUP BY device, kind ORDER BY lastMs DESC`)
       .all(this.now() - 7 * DAY_MS)
       .map((r) => ({ device: r.device, kind: r.kind, lastSeen: r.ts, records7d: Number(r.records7d) }));
+  }
+
+  /**
+   * 设备心跳（MG27，只读观测）：按硬件 UUID upsert 最近一次载荷；device = 设备 token 绑定名（入网 key → null）。
+   * 只保留最近一次心跳 + 首次出现时间，不入 usage_records / usage_daily。
+   */
+  upsertPresence({ uuid, device = null, payload }) {
+    const ms = this.now();
+    // 防冒用：已由某设备 token 绑定的行，只接受同一设备 token 的心跳（入网 key / 其他 token → 拒绝）
+    const row = this.db.prepare('SELECT device FROM device_presence WHERE uuid = ?').get(uuid);
+    if (row?.device && row.device !== device) return { ok: false, reason: 'uuid_bound' };
+    if (!row) {
+      // 未绑定（入网）行有上限：先清 7 天无心跳的，仍满则拒绝新行，防随机 UUID 灌表
+      this.db.prepare('DELETE FROM device_presence WHERE device IS NULL AND last_ms < ?').run(ms - 7 * DAY_MS);
+      if (device === null && Number(this.db.prepare('SELECT COUNT(*) AS c FROM device_presence WHERE device IS NULL').get().c) >= PRESENCE_UNBOUND_MAX) {
+        return { ok: false, reason: 'too_many_unregistered' };
+      }
+    }
+    this.db.prepare(`INSERT INTO device_presence (uuid, device, first_ms, last_ms, payload) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT (uuid) DO UPDATE SET device = excluded.device, last_ms = excluded.last_ms, payload = excluded.payload`)
+      .run(uuid, device, ms, ms, JSON.stringify(payload ?? {}));
+    return { ok: true };
+  }
+
+  /** @returns {{ uuid, device, firstSeen, lastSeen, lastMs, payload }[]} 按 lastSeen 降序 */
+  listPresence() {
+    return this.db.prepare('SELECT * FROM device_presence ORDER BY last_ms DESC').all().map((r) => ({
+      uuid: r.uuid, device: r.device ?? null, firstSeen: new Date(Number(r.first_ms)).toISOString(),
+      lastSeen: new Date(Number(r.last_ms)).toISOString(), lastMs: Number(r.last_ms), payload: JSON.parse(r.payload),
+    }));
+  }
+
+  /**
+   * 设备改名迁移（MG27：历史 device='mac' → 'macbook'）：明细直接改名；日聚合把旧名行并入新名行
+   * （同主键累加）再删除旧名行；同一事务。dryRun 只返回受影响行数。幂等：旧名无行时为 0。
+   */
+  renameDevice(from, to, { dryRun = false } = {}) {
+    const count = (table) => Number(this.db.prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE device = ?`).get(from).c);
+    const result = { records: count('usage_records'), daily: count('usage_daily') };
+    if (dryRun || (!result.records && !result.daily)) return result;
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('UPDATE usage_records SET device = ? WHERE device = ?').run(to, from);
+      this.db.prepare(`INSERT INTO usage_daily (day, kind, client, provider_id, model, upstream_model, device, records, requests, input, output, cache_read, cache_write)
+        SELECT day, kind, client, provider_id, model, upstream_model, ?, records, requests, input, output, cache_read, cache_write FROM usage_daily WHERE device = ?
+        ON CONFLICT (day, kind, client, provider_id, model, upstream_model, device) DO UPDATE SET
+          records = records + excluded.records, requests = requests + excluded.requests,
+          input = input + excluded.input, output = output + excluded.output,
+          cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write`).run(to, from);
+      this.db.prepare('DELETE FROM usage_daily WHERE device = ?').run(from);
+      this.db.exec('COMMIT');
+    } catch (err) { this.db.exec('ROLLBACK'); throw err; }
+    this.revision++;
+    return result;
+  }
+
+  /**
+   * 历史经网关用量回填设备（设备注册表上线前 served 一律记 device='gateway'）：按规则把
+   * `kind='served' AND device='gateway' AND client=?`（可选 ts < before）改归 device。
+   * 明细直接改；日聚合：before 当天之前的整行并入（含明细已过 90 天清理的长期行），before 当天
+   * 按明细重算拆分。同一事务；dryRun 只报行数；幂等（再跑为 0）。
+   * @param {{ client: string, device: string, before?: string|null }[]} rules
+   */
+  assignServedDevice(rules, { dryRun = false } = {}) {
+    const report = [];
+    const daySum = `SUM(1) AS records, SUM(1) AS requests,
+      SUM(CASE WHEN has_usage = 1 AND reported = 1 THEN input ELSE 0 END) AS input,
+      SUM(CASE WHEN has_usage = 1 AND reported = 1 THEN output ELSE 0 END) AS output,
+      SUM(CASE WHEN has_usage = 1 AND reported = 1 THEN cache_read ELSE 0 END) AS cache_read,
+      SUM(CASE WHEN has_usage = 1 AND reported = 1 THEN cache_write ELSE 0 END) AS cache_write`;
+    const upsert = this.db.prepare(`INSERT INTO usage_daily (day, kind, client, provider_id, model, upstream_model, device, records, requests, input, output, cache_read, cache_write)
+      VALUES (?, 'served', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT (day, kind, client, provider_id, model, upstream_model, device) DO UPDATE SET
+        records = records + excluded.records, requests = requests + excluded.requests,
+        input = input + excluded.input, output = output + excluded.output,
+        cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write`);
+    const run = () => {
+      for (const { client, device, before = null } of rules) {
+        const beforeMs = before ? Date.parse(before) : Number.MAX_SAFE_INTEGER;
+        const cutDay = before ? localDay(beforeMs) : null;
+        const recWhere = "kind = 'served' AND device = 'gateway' AND client = ? AND ts_ms < ?";
+        const records = Number(this.db.prepare(`SELECT COUNT(*) AS c FROM usage_records WHERE ${recWhere}`).get(client, beforeMs).c);
+        const dayWhere = "kind = 'served' AND device = 'gateway' AND client = ?" + (cutDay ? ' AND day < ?' : '');
+        const dayArgs = cutDay ? [client, cutDay] : [client];
+        const daily = Number(this.db.prepare(`SELECT COUNT(*) AS c FROM usage_daily WHERE ${dayWhere}`).get(...dayArgs).c);
+        report.push({ client, device, before, records, daily });
+        if (dryRun) continue;
+        // 截止日当天：按明细重算出要搬走的部分（先算，再改明细）
+        const split = cutDay ? this.db.prepare(`SELECT provider_id, model, upstream_model, ${daySum} FROM usage_records
+          WHERE ${recWhere} AND ts_ms >= ? GROUP BY provider_id, model, upstream_model`).all(client, beforeMs, Date.parse(`${cutDay}T00:00:00`)) : [];
+        this.db.prepare(`UPDATE usage_records SET device = ? WHERE ${recWhere}`).run(device, client, beforeMs);
+        this.db.prepare(`INSERT INTO usage_daily (day, kind, client, provider_id, model, upstream_model, device, records, requests, input, output, cache_read, cache_write)
+          SELECT day, kind, client, provider_id, model, upstream_model, ?, records, requests, input, output, cache_read, cache_write FROM usage_daily WHERE ${dayWhere}
+          ON CONFLICT (day, kind, client, provider_id, model, upstream_model, device) DO UPDATE SET
+            records = records + excluded.records, requests = requests + excluded.requests,
+            input = input + excluded.input, output = output + excluded.output,
+            cache_read = cache_read + excluded.cache_read, cache_write = cache_write + excluded.cache_write`).run(device, ...dayArgs);
+        this.db.prepare(`DELETE FROM usage_daily WHERE ${dayWhere}`).run(...dayArgs);
+        for (const r of split) {
+          const v = [r.records, r.requests, r.input, r.output, r.cache_read, r.cache_write].map(Number);
+          upsert.run(cutDay, client, r.provider_id ?? '', r.model ?? '', r.upstream_model ?? r.model ?? '', device, ...v);
+          upsert.run(cutDay, client, r.provider_id ?? '', r.model ?? '', r.upstream_model ?? r.model ?? '', 'gateway', ...v.map((x) => -x));
+        }
+        this.db.prepare("DELETE FROM usage_daily WHERE device = 'gateway' AND records <= 0").run();
+      }
+    };
+    if (dryRun) run();
+    else { this.#tx(run); this.revision++; }
+    return report;
+  }
+
+  /** served 最近使用时间按 client × device（密钥页 agent × 设备 key 各自的「最近使用」）。 */
+  lastServedByClientDevice() {
+    return this.db.prepare(`SELECT client, device, MAX(ts_ms) AS ms FROM usage_records WHERE kind = 'served' GROUP BY client, device`)
+      .all().map((r) => ({ client: r.client, device: r.device, lastSeen: new Date(Number(r.ms)).toISOString() }));
   }
 
   get size() {

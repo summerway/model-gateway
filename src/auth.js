@@ -11,6 +11,7 @@ const digest = (value) => createHash('sha256').update(value).digest();
 const equal = (expected, actual) => Boolean(expected && actual) && timingSafeEqual(digest(expected), digest(actual));
 const pagePaths = new Set(['/', '/console', '/dashboard', '/usage', '/keys', '/inbox']);
 const observedPaths = new Set(['/internal/usage/observed', '/internal/usage/codex']);
+const HEARTBEAT_PATH = '/internal/devices/heartbeat';
 const safeNext = (value) => value?.startsWith('/') && !value.startsWith('//') && !/[\\\r\n]/.test(value) ? value : '/';
 // 反代后面的真实来源：只有当直连方本身在内网（即可信反代）时才采信它写入的 X-Real-IP
 const fromPrivateNetwork = (req) => {
@@ -61,7 +62,10 @@ p[role=alert]{min-height:1.2em;margin:10px 0 0;font-size:12px;color:#cc3131}
       const receiver = config.observedUsage ?? config.codexUsage;
       const device = receiver?.devices?.find((entry) => equal(resolveRef(entry.keyRef), actual));
       const collector = device || equal(resolveRef(receiver?.apiKeyRef), actual);
-      if (collector && req.method === 'POST' && observedPaths.has(path)) return { ok: true, ...(device ? { device: device.name } : {}) };
+      if (collector && req.method === 'POST' && (observedPaths.has(path) || path === HEARTBEAT_PATH)) return { ok: true, ...(device ? { device: device.name } : {}) };
+      // 入网 key（MG27）：只能上报心跳，设备标「待注册」；不能推用量、不能读任何数据
+      const enroll = !collector && equal(resolveRef(receiver?.enrollKeyRef), actual);
+      if (enroll && req.method === 'POST' && path === HEARTBEAT_PATH) return { ok: true, enroll: true };
       const inboxPost = req.method === 'POST' && (path === '/internal/inbox' || path.startsWith('/internal/inbox/'));
       if (hasSession(req)) {
         if (req.method === 'GET' || inboxPost) return { ok: true };
@@ -74,7 +78,7 @@ p[role=alert]{min-height:1.2em;margin:10px 0 0;font-size:12px;color:#cc3131}
         const forceProbe = path === '/internal/dashboard' && /[?&]force=/.test(req.url ?? '');
         if ((req.method === 'GET' && !forceProbe) || ((inboxPost || forceProbe) && fromPrivateNetwork(req))) return { ok: true };
       }
-      return { ok: false, status: collector ? 403 : 401, error: collector ? 'forbidden' : 'unauthorized' };
+      return { ok: false, status: collector || enroll ? 403 : 401, error: collector || enroll ? 'forbidden' : 'unauthorized' };
     },
     gatePage(req, path) {
       if (!pagePaths.has(path)) return { ok: true };

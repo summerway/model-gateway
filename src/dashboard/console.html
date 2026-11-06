@@ -348,6 +348,7 @@ tr.open .caret { transform:rotate(90deg); }
 .agent-ico { width:18px; height:18px; flex:none; }
 tr.row.hl td { background:var(--accent-wash); }
 .tbl tr.grp td { padding:10px 12px 4px; font-size:12px; font-weight:650; color:var(--muted); letter-spacing:.02em; }
+.tbl tr.grp.sub td { padding:8px 12px 2px 24px; font-weight:600; }
 
 /* ── 建议 ── */
 .sugg { display:grid; gap:14px; }
@@ -631,11 +632,13 @@ function quotaCard(p) {
   } else {
     body = [q.fiveHour && meterHtml(p.id + ':5h', t('5 小时额度'), q.fiveHour), q.weekly && meterHtml(p.id + ':w', t('本周额度'), q.weekly)].filter(Boolean).join('');
   }
+  if (!body && p.probe?.lastError) body = `<div class="q-error"><div style="color:var(--crit);font-weight:600">${t('额度暂不可用')}</div><div class="muted" style="font-size:12px;margin-top:4px">${esc(p.probe.lastError)}</div></div>`;
   // 芯片优先级：认证/配置异常 > 熔断冷却/恢复试探 > 欠费/待重置/即将用尽 > 正常
   let chip = `<span class="chip good">${t('{v1}正常', { v1: I.ok })}</span>`;
   if (p.healthy === false) chip = `<span class="chip crit">${I.crit}${p.healthBasis === 'configuration' ? t('配置异常') : t('认证异常')}</span>`;
   else if (phase === 'open') chip = `<span class="chip crit">${t('{v1}熔断冷却', { v1: I.crit })}</span>`;
   else if (phase === 'half_open') chip = `<span class="chip warn">${t('{v1}恢复试探', { v1: I.warn })}</span>`;
+  else if (!p.quota && p.probe?.lastError) chip = `<span class="chip crit">${I.crit}${t('探测失败')}</span>`;
   else if (q.balance) {
     if (Number(q.balance.total) < 0) chip = `<span class="chip crit">${t('{v1}欠费', { v1: I.crit })}</span>`;
   } else {
@@ -694,8 +697,10 @@ function viewOverview() {
   for (const p of S.providers) if (p.quota?.balance && Number(p.quota.balance.total) < 0) alerts.push(['crit', `<b>${t('{v1} 余额为负（¥{v2}）', { v1: esc(p.name), v2: p.quota.balance.total })}</b>${t('，经它的请求会失败，备用渠道会接力。')}`, `<a class="alink" href="#gateway-catalog">${t('查看调用链')}</a>`]);
   if (rate < 0.95) alerts.push(['warn', `<b>${t('今日成功率 {v1}', { v1: fmtPct(rate) })}</b>${t('：{v1} 次请求失败。', { v1: fmtInt(totals.failed) })}`, `<a class="alink" href="#logs-requests">${t('查看失败请求')}</a>`]);
   if (pending) alerts.push(['info', `<b>${t('{v1} 条模型建议', { v1: pending })}</b>${t('待处理。')}`, `<a class="alink" href="#gateway-suggestions">${t('去处理')}</a>`]);
-  const subs = S.providers.filter((p) => p.quota && (p.quota.fiveHour || p.quota.weekly));
-  const bals = S.providers.filter((p) => p.quota?.balance);
+  // 探测失败且无快照（如 Claude 凭据失效）：按额度形态保留卡片并显示原因，渠道不从概览消失
+  const failed = (p) => !p.quota && p.probe?.supported && p.probe?.lastError;
+  const subs = S.providers.filter((p) => (p.quota && (p.quota.fiveHour || p.quota.weekly)) || (failed(p) && p.quotaKind === 'tiers'));
+  const bals = S.providers.filter((p) => p.quota?.balance || (failed(p) && p.quotaKind === 'balance'));
   const fallbacks = S.fallbacksToday ?? S.events.filter((e) => /fallback|demoted/.test(e.type)).length;
   const served = S.dayClient.filter((r) => r.day === TODAY && r.kind === 'served').reduce((a, r) => a + r.tokens, 0);
   return head(t('概览'), t('现在是否正常、额度还剩多少')) + `<div class="view">
@@ -1038,7 +1043,7 @@ function viewBreakdown(kindOfView) {
     if (hl) openRows.add(id);
     const kinds = [...r.kinds].filter((k) => k !== 'all');
     const kindChips = isSrc ? kinds.map((k) => `<span class="chip ${k === 'served' ? 'info' : 'ghost'}">${KIND_LABEL[k]}</span>`).join(' ') : '';
-    const agent = isSrc && AGENTS[r.key] ? `<span class="chip ghost">${AGENTS[r.key].location === 'local' ? t('本地') : t('云端')}</span>` : '';
+    const agent = isSrc && AGENTS[r.key] ? deviceChips(AGENTS[r.key]) : '';
     let detail = '';
     if (open) detail = breakdownDetail(r, isSrc, period, color);
     const lead = isSrc && AGENTS[r.key] ? agentIcon(r.key) : `<span class="dot" style="background:${color(r.key)}"></span>`;
@@ -1360,19 +1365,51 @@ function viewChannels() {
   return subTabs('usage-channels', kindSeg()) + `<div class="view">${uFiltersHtml()}${inner}</div>`;
 }
 
-/* ── 用量 · 设备 ── */
+/* ── 设备 Tag（MG29）：distribution.json v2 devices 的 label；v1 注册表回退「本地 / 云端」 ── */
+function deviceLabelOf(id) {
+  return S?.deviceRegistry?.find((d) => d.id === id)?.label ?? ({ gateway: t('网关'), nas: 'NAS', mac: 'Mac' }[id] ?? id);
+}
+function deviceChips(a) {
+  if (a?.devices?.length) return a.devices.map((d) => `<span class="chip ghost">${esc(deviceLabelOf(d))}</span>`).join(' ');
+  if (!a?.location || a.location === 'unknown') return '';
+  return `<span class="chip ghost">${a.location === 'local' ? t('本地') : t('云端')}</span>`;
+}
+
+/* ── 用量 · 设备：注册设备 ⨝ 在场 ⨝ 用量（MG29）；未注册设备只读虚线卡片，注册在 skills-admin 完成 ── */
 function viewUsageDevices() {
   if (!S) return subTabs('usage-devices') + `<div class="view">${skTableCard(t('采集设备'), 6)}</div>`;
   const days = daysBack(30);
-  const NAME = { gateway: t('网关'), nas: 'NAS', mac: 'Mac' };
-  const cards = S.devices.map((d) => {
-    const v = days.map((day) => S.dayDevice.filter((x) => x.day === day && x.device === d.device).reduce((a, x) => a + x.tokens, 0));
-    const tot = v.reduce((a, x) => a + x, 0);
-    return `<section class="card"><div class="card-h"><h2>${NAME[d.device] ?? esc(d.device)}</h2><span class="chip ${d.kind === 'served' ? 'info' : 'ghost'}">${KIND_LABEL[d.kind]}</span></div>
-      <div class="num" style="font-size:20px;font-weight:650">${fmtTok(tot)}</div><div class="muted" style="font-size:12px">${t('近 30 天 Tokens · 最近数据 {v1} · 近 7 天 {v2} 条记录', { v1: relTime(d.lastSeen), v2: fmtInt(d.records7d) })}</div>
-      <div style="margin-top:10px">${sparkline(v)}</div></section>`;
-  }).join('');
-  return subTabs('usage-devices') + `<div class="view"><div class="grid-3">${cards}</div>
+  const series = (id) => days.map((day) => S.dayDevice.filter((x) => x.day === day && x.device === id).reduce((a, x) => a + x.tokens, 0));
+  const usageOf = (id) => S.devices.filter((d) => d.device === id);
+  const kindChips = (id) => usageOf(id).map((d) => `<span class="chip ${d.kind === 'served' ? 'info' : 'ghost'}">${KIND_LABEL[d.kind]}</span>`).join(' ');
+  const statusChip = (p) => p.lastSeen
+    ? `<span class="chip ${p.online ? 'good' : 'warn'}">${p.online ? t('在线') : t('离线')}</span>`
+    : `<span class="chip ghost">${t('无心跳')}</span>`;
+  const usageBlock = (id) => {
+    const v = series(id), tot = v.reduce((a, x) => a + x, 0);
+    const last = usageOf(id).map((d) => d.lastSeen).sort().at(-1);
+    return `<div class="num" style="font-size:20px;font-weight:650;margin-top:8px">${fmtTok(tot)}</div><div class="muted" style="font-size:12px">${t('近 30 天 Tokens')}${last ? ` · ${t('最近用量 {v1}', { v1: relTime(last) })}` : ''}</div><div style="margin-top:10px">${sparkline(v)}</div>`;
+  };
+  const agentRow = (list, label) => list.length ? `<div class="muted" style="font-size:12px;margin-top:8px">${label}</div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${list.join('')}</div>` : '';
+  const reg = S.presence.devices;
+  const regIds = new Set(S.deviceRegistry.map((d) => d.id));
+  const cards = reg.map((d) => {
+    const eps = d.endpoints.map((e) => `<span class="chip ghost">${AGENT_ICON[e.iconKind] ? agentIcon(e.app) : ''}${esc(e.label ?? e.app)}</span>`);
+    const unbound = d.unboundAgents.map((a) => `<span class="chip warn">${esc(a.agent)}</span>`);
+    const meta = [d.platform === 'mac' ? 'Mac' : d.platform === 'nas' ? 'NAS' : d.platform, d.model, d.lastSeen ? t('心跳 {v1}', { v1: relTime(d.lastSeen) }) : null].filter(Boolean).map(esc).join(' · ');
+    return `<section class="card"><div class="card-h"><h2>${esc(d.label)}</h2><span style="display:flex;gap:6px">${statusChip(d)}${kindChips(d.id)}</span></div>
+      <div class="muted" style="font-size:12px">${meta}</div>
+      ${agentRow(eps, t('已绑定端点'))}${agentRow(unbound, t('检测到未绑定的 agent（在 skills-admin 绑定）'))}
+      ${usageBlock(d.id)}</section>`;
+  });
+  // 网关自身（served 无设备归属的流量）与注册表之外的历史采集来源
+  const extra = [...new Set(S.devices.map((d) => d.device))].filter((id) => !regIds.has(id)).map((id) => `<section class="card"><div class="card-h"><h2>${esc(deviceLabelOf(id))}</h2><span style="display:flex;gap:6px">${kindChips(id)}</span></div>
+      <div class="muted" style="font-size:12px">${id === 'gateway' ? t('经网关、未绑定设备的流量') : t('用量采集来源（未在设备注册表中）')}</div>${usageBlock(id)}</section>`);
+  const pending = S.presence.unregistered.map((u) => `<section class="card" style="border:1px dashed var(--hair);box-shadow:none;background:transparent"><div class="card-h"><h2>${esc(u.hostname ?? t('未知设备'))}</h2><span style="display:flex;gap:6px"><span class="chip warn">${t('未注册')}</span>${statusChip(u)}</span></div>
+      <div class="muted" style="font-size:12px">${[u.platform, u.model, u.lastSeen ? t('心跳 {v1}', { v1: relTime(u.lastSeen) }) : null].filter(Boolean).map(esc).join(' · ')}</div>
+      ${agentRow(u.detected.map((a) => `<span class="chip ghost">${esc(a.agent)}</span>`), t('检测到的 agent'))}
+      <div class="muted" style="font-size:12px;margin-top:10px">${t('在 skills-admin 的 Inbox 确认注册后显示为设备')}</div></section>`);
+  return subTabs('usage-devices') + `<div class="view"><div class="grid-3">${[...cards, ...extra, ...pending].join('')}</div>
     </div>`;
 }
 
@@ -1467,17 +1504,38 @@ function viewKeys() {
     const icon = a ? agentIcon(k.app) : `<span class="dot" style="background:${srcColor(k.app)}"></span>`;
     let h = 0; for (const ch of String(k.app)) h = (h * 31 + ch.codePointAt(0)) >>> 0;
     const last4 = String(h % 10000).padStart(4, '0');
-    return `<tr><td><div class="name">${icon}<span class="t">${esc(k.app === 'shared' ? t('共享密钥') : k.app)}</span>${a ? ` <span class="chip ghost">${a.location === 'local' ? t('本地') : t('云端')}</span>` : ''}</div></td>
+    const tag = (S.deviceRegistry ?? []).length && k.agent ? '' : k.deviceInfo ? `<span class="chip ghost">${esc(k.deviceInfo.label)}</span>` : a ? deviceChips(a) : '';
+    return `<tr><td><div class="name" title="${esc(k.app)}">${icon}<span class="t">${esc(k.app === 'shared' ? t('共享密钥') : (AGENTS[k.app]?.label ?? k.app))}</span>${tag ? ` ${tag}` : ''}</div></td>
       <td><span style="font-family:var(--mono);font-size:12.5px;color:var(--muted)">${k.status === 'missing' ? '—' : `•••• •••• ${last4}`}</span></td>
       <td><span class="chip ${ST[k.status][0]}">${k.status === 'ok' ? I.ok : I.warn}${ST[k.status][1]}</span></td><td class="r muted">${k.lastSeen ? relTime(k.lastSeen) : t('从未使用')}</td><td class="r"><a class="alink" href="#usage-sources/${encodeURIComponent(k.app ?? '')}">${t('用量 ›')}</a></td></tr>`;
   };
   const agentKeys = [...S.keys].filter((k) => k.agent);
   const bizKeys = [...S.keys].filter((k) => !k.agent);
   const grp = (t) => `<tr class="grp"><td colspan="5">${t}</td></tr>`;
+  // Agent 区（v2 注册表）：按设备分组列出绑定到该设备的全部 agent —— 有网关 key 显示 key 行；
+  // 没有 key 的是订阅直连、未接入网关（如 Mac mini 上的 Claude Code / Codex）。
+  // 网关 key 未声明设备或设备未注册 → 「未绑定设备」组。v1 注册表回退为只列有 key 的 agent。
+  const noKeyRow = (e) => `<tr class="nokey"><td><div class="name" title="${esc(e.app)}">${AGENT_ICON[e.iconKind] ?? `<span class="dot" style="background:${srcColor(e.app)}"></span>`}<span class="t">${esc(e.label ?? e.app)}</span></div></td>
+      <td><span class="muted">—</span></td><td><span class="chip ghost">${t('订阅直连 · 未接入网关')}</span></td><td class="r muted">—</td><td class="r"><a class="alink" href="#usage-sources/${encodeURIComponent(e.app)}">${t('用量 ›')}</a></td></tr>`;
+  const agentRows = () => {
+    const reg = S.deviceRegistry ?? [];
+    if (!reg.length) return agentKeys.map(keyRow).join('');
+    const used = new Set();
+    const groups = reg.map((d) => {
+      const rows = (S.agents ?? []).filter((e) => (e.devices ?? []).includes(d.id)).flatMap((e) => {
+        const ks = agentKeys.filter((k) => k.app === e.app && k.device === d.id);
+        ks.forEach((k) => used.add(k));
+        return ks.length ? ks.map(keyRow) : [noKeyRow(e)];
+      });
+      return rows.length ? `<tr class="grp sub"><td colspan="5">${esc(d.label)}</td></tr>` + rows.join('') : '';
+    }).join('');
+    const rest = agentKeys.filter((k) => !used.has(k));
+    return groups + (rest.length ? `<tr class="grp sub"><td colspan="5">${t('未绑定设备')}</td></tr>` + rest.map(keyRow).join('') : '');
+  };
   return subTabs('gateway-keys') + `<div class="view">
     <section class="card"><div class="card-h"><h2>${t('应用密钥')}</h2></div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>${t('应用')}</th><th>Key</th><th>${t('状态')}</th><th class="r">${t('最近使用')}</th><th></th></tr></thead><tbody>
-    ${grp('Agent')}${agentKeys.map(keyRow).join('') || `<tr><td colspan="5" class="empty">${t('没有 Agent')}</td></tr>`}
+    ${grp('Agent')}${agentRows() || `<tr><td colspan="5" class="empty">${t('没有 Agent')}</td></tr>`}
     ${grp(t('业务应用'))}${bizKeys.map(keyRow).join('') || `<tr><td colspan="5" class="empty">${t('没有业务应用')}</td></tr>`}
     </tbody></table></div></section>
     </div>`;
@@ -1548,7 +1606,7 @@ function viewRequests() {
   return subTabs('logs-requests') + `<div class="view">${inner}</div>`;
 }
 let EV;
-labelUpdates.push(() => { EV = { activation: ['good', t('窗口激活')], model_guard: ['info', t('模型巡检')], model_inbox_applied: ['good', t('模型落地')], model_inbox_rollback: ['warn', t('模型回滚')], model_inbox_error: ['crit', t('落地异常')], client_abort: ['', t('客户端中断')], probe_error: ['crit', t('额度查询异常')], quota_restored: ['good', t('额度恢复')], quota_demoted: ['warn', t('额度将尽降级')], vision_placeholder: ['', t('图片占位')], vision_reroute: ['info', t('视觉改写')], token_refresh: ['', t('令牌轮换')], fallback: ['warn', t('接力切换')], request_error: ['crit', t('请求失败')], config_model_unknown: ['warn', t('未知模型')], embeddings_degraded: ['warn', t('向量降级')], embeddings_error: ['crit', t('向量异常')], imagegen: ['good', t('图片生成')], imagegen_error: ['crit', t('图片生成失败')] }; });
+labelUpdates.push(() => { EV = { activation: ['good', t('窗口激活')], model_guard: ['info', t('模型巡检')], model_inbox_applied: ['good', t('模型落地')], model_inbox_rollback: ['warn', t('模型回滚')], model_inbox_error: ['crit', t('落地异常')], client_abort: ['', t('客户端中断')], probe_error: ['crit', t('额度查询异常')], quota_restored: ['good', t('额度恢复')], quota_demoted: ['warn', t('额度将尽降级')], vision_placeholder: ['', t('图片占位')], vision_reroute: ['info', t('视觉改写')], token_refresh: ['', t('令牌轮换')], fallback: ['warn', t('接力切换')], request_error: ['crit', t('请求失败')], config_model_unknown: ['warn', t('未知模型')], config_key_device_mismatch: ['warn', t('密钥设备不一致')], embeddings_degraded: ['warn', t('向量降级')], embeddings_error: ['crit', t('向量异常')], imagegen: ['good', t('图片生成')], imagegen_error: ['crit', t('图片生成失败')] }; });
 labelUpdates.at(-1)();
 /* 事件明细副行：按类型回答「谁、在哪、出了什么」；返回纯文本（调用方 esc） */
 let INBOX_ACT;
@@ -1736,7 +1794,7 @@ async function fetchJson(url) {
 }
 async function loadConsoleData(force = null) {
   // force: null = 只读服务端快照（自动 60s）；'all' = 全局重查额度；providerId = 单渠道重查
-  const [dash, usage, keysD, inbox, activity, dClient, dModel, dProvider, dDevice, dClientModel, devices] = await Promise.all([
+  const [dash, usage, keysD, inbox, activity, dClient, dModel, dProvider, dDevice, dClientModel, devices, presence] = await Promise.all([
     fetchJson('/internal/dashboard' + (force ? '?force=' + encodeURIComponent(force) : '')),
     fetchJson('/internal/usage?range=today&kind=served'), // 概览「今日网关」口径；请求明细由 LG（24h 混排）按需拉取
     fetchJson('/internal/keys'),
@@ -1748,6 +1806,8 @@ async function loadConsoleData(force = null) {
     fetchJson('/internal/usage/daily?groupBy=day,device'),
     fetchJson('/internal/usage/daily?groupBy=day,client,model'),
     fetchJson('/internal/usage/devices'),
+    // 设备注册 ⨝ 在场（MG27）；旧网关无此端点 → 空视图，设备页退回只显示用量采集设备
+    fetchJson('/internal/devices').catch(() => ({ devices: [], unregistered: [] })),
   ]);
   S = {
     generatedAt: new Date().toISOString(),
@@ -1769,6 +1829,8 @@ async function loadConsoleData(force = null) {
     dayDevice: dDevice.rows ?? [],
     clientModel: dClientModel.rows ?? [],
     devices: devices.devices ?? [],
+    deviceRegistry: keysD.devices ?? [],
+    presence: { devices: presence.devices ?? [], unregistered: presence.unregistered ?? [], offlineAfterSec: presence.offlineAfterSec ?? 900 },
   };
   INBOX = { csrf: inbox.csrf ?? '', providers: inbox.providers ?? {}, rollback: inbox.rollback ?? null };
 }

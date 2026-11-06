@@ -26,8 +26,11 @@ gateway:
     - key: env:GATEWAY_KEY_OPENCLAW
       app: openclaw
       note: "OpenClaw 配置：网关 provider apiKey"
+    # agent × 设备：同一 agent 在多台设备上各一把 key，device = distribution.json devices 的 id；
+    # served 用量按 device 归属设备（未声明 → 记为 gateway）。(app, device) 组合唯一。
     - key: env:GATEWAY_KEY_CLAUDE_CODE
       app: claude-code
+      device: mac-mini
       note: "Claude Code settings.json：env.ANTHROPIC_AUTH_TOKEN"
     - key: env:GATEWAY_KEY_CODEX
       app: codex
@@ -171,8 +174,9 @@ providers:
 #     - claude-sonnet-5-5                                  # 无调用链，不影响路由
 #     - claude-haiku-5-5
 
-# 应用密钥页 Agent 映射（可选）：只读 skills 仓 distribution.json 的 endpoints。
-# endpoint id 与 gateway.keys[].app 对应；mac-symlink → 本地，nas-dist-dir → 云端。
+# 设备 / agent / 端点注册表（可选）：只读 skills 仓 distribution.json（v2：agents / devices / endpoints）。
+# endpoint id 与 gateway.keys[].app 对应，keys[].device 与 devices 的 id 对应；不一致记
+# config_key_device_mismatch 事件。v1 文件（只有 type）过渡期仍可读：mac-symlink → 本地，nas-dist-dir → 云端。
 # 未配置 → 页面不分 Agent 组。compose 只读挂载 NAS 上 skills checkout 的该文件。
 # agentEndpoints:
 #   file: /app/skills/distribution.json
@@ -291,6 +295,10 @@ observedUsage:
   apiKeyRef: env:USAGE_SYNC_KEY
   # 设备 token 只允许推送 observed 用量；token 模式不要求私网 IP。
   # 命中 token 后由网关绑定设备名，覆盖上传的 device；旧 apiKeyRef 不绑定设备。
+  # 设备心跳（device-agent 每 5 分钟一次）：新设备只持入网 key 时只能上报心跳，在 skills-admin
+  # Inbox 确认注册后换发下方 devices 里的设备专属 token。
+  # enrollKeyRef: env:DEVICE_ENROLL_KEY
+  # offlineAfterSec: 900
   # devices:
-  #   - name: mac
-  #     keyRef: env:USAGE_SYNC_MAC_KEY
+  #   - name: mac-mini
+  #     keyRef: env:USAGE_SYNC_MAC_MINI_KEY

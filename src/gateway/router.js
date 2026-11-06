@@ -140,6 +140,7 @@ export function createRequestHandler(deps) {
   //    归因（authorized 返回的 app；共享 key/裸字符串配置 → 'shared'）──
   const newUctx = (path, client, req) => ({
     t0: Date.now(), path, model: null, recorded: false, client: client || null,
+    ...(keyDevices.has(extractKey(req)) ? { device: keyDevices.get(extractKey(req)) } : {}),
     ...(client === 'shared' && req.headers['user-agent'] ? { ua: req.headers['user-agent'].slice(0, 120) } : {}),
   });
   function recordU(uctx, fields = {}) {
@@ -149,6 +150,7 @@ export function createRequestHandler(deps) {
       ts: new Date(uctx.t0).toISOString(),
       path: uctx.path,
       client: uctx.client ?? null,
+      ...(uctx.device ? { device: uctx.device } : {}),
       ...(uctx.ua ? { ua: uctx.ua } : {}),
       providerId: fields.providerId ?? null,
       model: uctx.model,
@@ -170,10 +172,12 @@ export function createRequestHandler(deps) {
   // gateway keys：key → app（per-app 归因）。兼容归一化后的 {key, app} 条目与
   // 裸字符串/手建 config（app=shared）；未解析/冲突条目记事件并保留诊断状态。
   const gatewayKeys = new Map();
+  const keyDevices = new Map(); // key → device（agent × 设备；未声明 → 无，served 记 'gateway'）
   const keyStates = [];
   for (const entry of config.gateway?.keys ?? []) {
     const ref = typeof entry === 'string' ? entry : entry?.key;
     const app = (typeof entry === 'string' ? undefined : entry?.app) || 'shared';
+    const device = (typeof entry === 'string' ? undefined : entry?.device) || null;
     const k = resolveRef(ref);
     let status = 'ok';
     if (!k || k.startsWith('env:')) {
@@ -185,8 +189,11 @@ export function createRequestHandler(deps) {
       const apps = [gatewayKeys.get(k), app];
       events?.record('gateway_key_conflict', { apps });
       console.error(`[gateway] gateway_key_conflict: apps=${apps.join(',')}; keeping first entry`);
-    } else gatewayKeys.set(k, app);
-    keyStates.push({ app, note: entry?.note ?? null, status, masked: status === 'missing' ? null : '…' + k.slice(-4) });
+    } else {
+      gatewayKeys.set(k, app);
+      if (device) keyDevices.set(k, device);
+    }
+    keyStates.push({ app, device, note: entry?.note ?? null, status, masked: status === 'missing' ? null : '…' + k.slice(-4) });
   }
   // 来源(client) 筛选下拉：配置声明的 app 集合（与运行时观测到的取并集）
   const keyApps = () => [...new Set((config.gateway?.keys ?? []).map((k) =>
@@ -262,6 +269,7 @@ export function createRequestHandler(deps) {
         if (!gate.ok) return sendJson(res, gate.status, { error: gate.error });
         if (auth.mode === 'token') req.mgAuthorized = true;
         req.mgDevice = gate.device;
+        if (gate.enroll) req.mgEnroll = true;
         if (await monitorRoute(req, res, url, path) !== NOT_HANDLED) return;
         if (await opsRoute(req, res, url, path) !== NOT_HANDLED) return;
       }

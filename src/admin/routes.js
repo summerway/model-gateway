@@ -6,7 +6,7 @@ import { AdminError, sendError } from './errors.js';
 import { redactConfig } from './config-changes.js';
 
 export const ROUTES = [
-  ...['status', 'providers', 'models', 'quota', 'usage', 'events', 'inbox', 'config', 'openapi.json'].map(p => ({ method: 'GET', path: `/${p}` })),
+  ...['status', 'providers', 'models', 'quota', 'usage', 'devices', 'events', 'inbox', 'config', 'openapi.json'].map(p => ({ method: 'GET', path: `/${p}` })),
   ...['usage/observed', 'config/changes', 'config/changes/{id}/apply', 'config/rollback', 'reload', 'inbox/{id}/{action}', 'inbox/rollback'].map(p => ({ method: 'POST', path: `/${p}` })),
 ];
 const spec = JSON.parse(readFileSync(new URL('../../docs/openapi.json', import.meta.url), 'utf8'));
@@ -52,6 +52,12 @@ export function createAdminRoutes({ auth, config, catalog, configChanges, opsRou
         copy.searchParams.delete('force');
         const result = await internal(opsRoute, req, copy, readPaths[resource]);
         return reply(resource === '/providers' ? { providers: result.body.providers } : result.body);
+      }
+      // MG27：注册设备 ⨝ 在场（含硬件 UUID、检测路径、converge 结果，供 skills-admin 拉取做注册发现）
+      if (get && resource === '/devices') {
+        req.mgDeviceDetail = true;
+        const result = await internal(monitorRoute, req, new URL(url), '/internal/devices');
+        return reply(result.body);
       }
       if ((get && resource === '/usage') || observed) {
         const copy = new URL(url);

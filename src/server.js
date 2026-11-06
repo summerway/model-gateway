@@ -17,12 +17,12 @@ import { CircuitBreaker } from './gateway/fallback/circuit.js';
 import { QuotaProbe } from './ops/jobs/quota-probe.js';
 import { WindowActivator, restoreAnchorsFromEvents } from './ops/jobs/window-activator.js';
 import { ClaudeUsageSync } from './monitor/claude-usage-sync.js';
-import { AgentEndpoints } from './monitor/agent-endpoints.js';
+import { AgentEndpoints, keyDeviceMismatches } from './monitor/agent-endpoints.js';
 import { ModelInbox } from './ops/model-inbox.js';
 import { ModelGuard } from './ops/jobs/model-guard.js';
 import { CodexResetForecast } from './ops/jobs/codex-reset-forecast.js';
 import { createProviderRegistry } from './gateway/providers/registry.js';
-import { isDemo, installFetchGuard, seedDemo } from './demo.js';
+import { DEMO_DISTRIBUTION, isDemo, installFetchGuard, seedDemo } from './demo.js';
 
 const demo = isDemo(process.env);
 const demoEvents = demo ? new EventLog(500) : null;
@@ -92,11 +92,23 @@ const forecast = demo || config.codexResetForecast?.enabled === false
   : new CodexResetForecast(config.codexResetForecast ?? {}).start();
 
 // 应用密钥页 Agent 映射：只读 skills 仓 distribution.json（未配置 → 空映射）
+// MG26：每次重读后交叉校验 keys[].device，不一致记 config_key_device_mismatch（同 app×device×原因只记一次）
+const reportedMismatch = new Set();
 const agentEndpoints = new AgentEndpoints({
   file: config.agentEndpoints?.file ?? null,
   intervalMs: (config.agentEndpoints?.intervalSec ?? 600) * 1000,
+  onLoad: (registry) => {
+    for (const m of keyDeviceMismatches(config.gateway?.keys, registry)) {
+      const id = `${m.app}@${m.device ?? ''}:${m.reason}`;
+      if (reportedMismatch.has(id)) continue;
+      reportedMismatch.add(id);
+      events.record('config_key_device_mismatch', m);
+      console.error(`[model-gateway] config_key_device_mismatch: app=${m.app} device=${m.device ?? '-'} reason=${m.reason}`);
+    }
+  },
 });
 if (!demo) agentEndpoints.start();
+else agentEndpoints.loadText(JSON.stringify(DEMO_DISTRIBUTION));
 
 // codex providers（type:codex）→ 运行时实例（OAuth token 管理）
 const registry = createProviderRegistry({
